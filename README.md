@@ -20,7 +20,7 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Arquitetura baseada em sistemas**: Sistema modular onde componentes independentes gerenciam aspectos específicos do jogo
 - **Sistema de cenas**: Gerenciamento de diferentes estados do jogo (menu, gameplay, etc.)
 - **Game Loop**: Loop de atualização baseado em `requestAnimationFrame` com cálculo de delta time
-- **Sistema de input**: Captura e processamento de eventos de teclado
+- **Sistema de input**: Captura e processamento de eventos de teclado e mouse
 - **Renderização Canvas**: Renderização 2D usando Canvas API
 - **Hot Reload**: Recarregamento automático durante o desenvolvimento
 
@@ -55,13 +55,15 @@ game/
 │       │   └── InputSystem.ts   # Sistema de input (teclado)
 │       │
 │       ├── input/                # Gerenciamento de input
-│       │   └── InputState.ts    # Estado das teclas pressionadas
+│       │   ├── InputState.ts    # Estado das teclas pressionadas
+│       │   └── MouseState.ts    # Estado do mouse (posição e botões)
 │       │
 │       ├── rendering/            # Renderização
 │       │   └── CanvasRenderer.ts # Renderizador Canvas 2D
 │       │
 │       └── scenes/               # Cenas do jogo
-│           └── MainMenuScene.ts # Cena do menu principal
+│           ├── MainMenuScene.ts # Cena do menu principal
+│           └── Level01Scene.ts  # Cena de gameplay nível 01
 │
 ├── dist/                         # Código compilado (gerado)
 ├── package.json
@@ -141,21 +143,30 @@ Classe central que coordena todos os componentes:
 ```
 1. Scene.update(delta)    → Lógica da cena (input, física, etc.)
 2. Scene.render()          → Renderização
-3. Systems.onUpdate(delta)  → Limpeza de estados (ex: input.clear())
+3. Systems.onUpdate(delta)  → Limpeza de estados temporários
+   - InputSystem: clearPressed(), clearReleased(), clearAllClicks()
+   - Mantém estados 'held' para teclas pressionadas continuamente
 ```
 
 #### 3. **Sistema de Cenas (`Scene.ts`)**
 
-Interface para diferentes estados do jogo:
+Classe abstrata para diferentes estados do jogo:
 
 - **onEnter()**: Chamado quando a cena é ativada
 - **onExit()**: Chamado quando a cena é desativada
 - **update(delta)**: Atualização lógica a cada frame
 - **render()**: Renderização visual
+- **renderer**: Propriedade protegida com acesso ao CanvasRenderer
+- **game**: Referência opcional ao Game para acessar sistemas
 
 **Exemplo de uso:**
 ```typescript
-class MainMenuScene implements Scene {
+class MainMenuScene extends Scene {
+    constructor(renderer: CanvasRenderer) {
+        super();
+        this.renderer = renderer;
+    }
+    
     onEnter() { /* Setup inicial */ }
     update(delta) { /* Lógica do menu */ }
     render() { /* Desenhar menu */ }
@@ -172,24 +183,45 @@ Interface para componentes modulares:
 - **onDestroy()**: Cleanup (opcional)
 
 **Sistemas disponíveis:**
-- `InputSystem`: Captura eventos de teclado
+- `InputSystem`: Captura eventos de teclado e mouse
 
 #### 5. **Sistema de Input**
 
 **InputSystem (`InputSystem.ts`)**:
-- Registra listeners de teclado
-- Atualiza o estado das teclas
-- Limpa o estado após cada frame
+- Registra listeners de teclado e mouse
+- Atualiza o estado das teclas e do mouse
+- Limpa estados temporários após cada frame (mantém estados 'held')
+- Gerencia transições de estado: pressed → held → released
 
 **InputState (`InputState.ts`)**:
 - Armazena o estado das teclas (pressed, released, held)
 - Métodos para verificar estado: `isPressed()`, `isReleased()`, `isHeld()`
+- Métodos de limpeza seletiva: `clearPressed()`, `clearReleased()`, `clear()`
+
+**MouseState (`MouseState.ts`)**:
+- Rastreia posição do mouse (x, y) relativa ao canvas
+- Gerencia estado dos botões do mouse (0=esquerdo, 1=meio, 2=direito)
+- Detecta cliques com posição: `wasClicked()`, `getClickPosition()`
+- Limpeza de estados de clique: `clearClick()`, `clearAllClicks()`
 
 **Uso:**
 ```typescript
-const input = this.game?.getSystems(InputSystem)?.getState();
+const inputSystem = this.game?.getSystems(InputSystem);
+const input = inputSystem?.getState();
+const mouse = inputSystem?.getMouseState();
+
+// Teclado
 if (input?.isPressed('Enter')) {
-    // Ação
+    // Ação no primeiro frame que Enter é pressionado
+}
+if (input?.isHeld('w')) {
+    // Ação enquanto W está sendo mantido pressionado
+}
+
+// Mouse
+if (mouse?.wasClicked(0)) { // Botão esquerdo
+    const clickPos = mouse.getClickPosition(0);
+    console.log(`Clicado em: ${clickPos?.x}, ${clickPos?.y}`);
 }
 ```
 
@@ -197,9 +229,18 @@ if (input?.isPressed('Enter')) {
 
 Abstração sobre Canvas API para renderização 2D:
 
-- **Métodos de desenho**: `drawText()`, `clear()`
+- **Métodos de desenho**: `drawText()`, `fillRect()`, `clear()`
 - **Utilitários**: `measureText()`, `save()`, `restore()`, `setTextAlign()`
+- **Acesso ao canvas**: `getCanvas()` para obter o elemento HTMLCanvasElement
 - Encapsula o contexto do canvas (privado)
+
+**Métodos principais:**
+- `clear(color?)`: Limpa o canvas (com cor opcional)
+- `drawText(text, x, y, options)`: Desenha texto com fonte e cor opcionais
+- `fillRect(x, y, width, height, color?)`: Desenha retângulo preenchido
+- `measureText(text, font?)`: Mede dimensões do texto
+- `save()` / `restore()`: Salva/restaura estado do contexto
+- `setTextAlign(align)`: Define alinhamento do texto
 
 ### Fluxo de Execução
 
@@ -263,6 +304,22 @@ npm start
 
 ## 🔧 Desenvolvimento
 
+### Cenas Existentes
+
+#### MainMenuScene
+Cena inicial do jogo que exibe o menu principal:
+- Exibe título "Meu Jogo"
+- Instrução para pressionar ENTER
+- Transição para Level01Scene ao pressionar ENTER
+
+#### Level01Scene
+Cena de gameplay demonstrando movimento de player:
+- Player representado por um retângulo vermelho
+- Movimento com WASD (w=up, a=left, s=down, d=right)
+- Normalização de vetor de movimento para velocidade consistente em diagonais
+- Movimento baseado em delta time (200 pixels/segundo)
+- Player inicializado no centro da tela
+
 ### Criando uma Nova Cena
 
 1. Crie um arquivo em `src/renderer/scenes/`:
@@ -270,12 +327,11 @@ npm start
 ```typescript
 import { Scene } from "../engine/Scene";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
+import { InputSystem } from "../systems/InputSystem";
 
-export class MyScene implements Scene {
-    game?: import("../engine/Game").Game;
-    private renderer: CanvasRenderer;
-    
+export class MyScene extends Scene {
     constructor(renderer: CanvasRenderer) {
+        super();
         this.renderer = renderer;
     }
     
@@ -284,12 +340,22 @@ export class MyScene implements Scene {
     }
     
     update(delta: number): void {
+        // Acessar input
+        const inputSystem = this.game?.getSystems(InputSystem);
+        const input = inputSystem?.getState();
+        const mouse = inputSystem?.getMouseState();
+        
         // Lógica da cena
+        if (input?.isPressed('Enter')) {
+            // Ação
+        }
     }
     
     render(): void {
+        if (!this.renderer) return;
         this.renderer.clear('#000000');
         // Renderização
+        this.renderer.fillRect(100, 100, 50, 50, '#ff0000');
     }
     
     onExit(): void {
@@ -336,7 +402,19 @@ this.game.addSystem(new MySystem());
 
 ```typescript
 const inputSystem = this.game?.getSystems(InputSystem);
-const state = inputSystem?.getState();
+const inputState = inputSystem?.getState();
+const mouseState = inputSystem?.getMouseState();
+
+// Verificar teclado
+if (inputState?.isHeld('w')) {
+    // Mover para cima
+}
+
+// Verificar mouse
+if (mouseState?.wasClicked(0)) { // Botão esquerdo
+    const pos = mouseState.getClickPosition(0);
+    console.log(`Clicado em: ${pos?.x}, ${pos?.y}`);
+}
 ```
 
 ## 📚 Componentes Principais
@@ -374,32 +452,57 @@ const state = inputSystem?.getState();
 - Fornecer métodos de desenho
 
 **Métodos principais:**
-- `clear(color?)`: Limpa o canvas
-- `drawText(text, x, y, options)`: Desenha texto
+- `clear(color?)`: Limpa o canvas (com cor opcional)
+- `drawText(text, x, y, options)`: Desenha texto com fonte e cor opcionais
+- `fillRect(x, y, width, height, color?)`: Desenha retângulo preenchido
 - `measureText(text, font?)`: Mede dimensões do texto
 - `save()` / `restore()`: Salva/restaura estado do contexto
 - `setTextAlign(align)`: Define alinhamento do texto
+- `getCanvas()`: Retorna o elemento HTMLCanvasElement
 
 ### InputSystem (`systems/InputSystem.ts`)
 
 **Responsabilidades:**
-- Capturar eventos de teclado
-- Manter estado das teclas
-- Limpar estado após cada frame
+- Capturar eventos de teclado e mouse
+- Manter estado das teclas e do mouse
+- Gerenciar transições de estado (pressed → held → released)
+- Limpar estados temporários após cada frame
 
 **Métodos:**
-- `getState()`: Retorna o estado atual do input
+- `getState()`: Retorna o estado atual do input (InputState)
+- `getMouseState()`: Retorna o estado atual do mouse (MouseState)
 
 ### InputState (`input/InputState.ts`)
 
 **Responsabilidades:**
 - Armazenar estado das teclas
 - Fornecer métodos de verificação
+- Gerenciar limpeza seletiva de estados
 
 **Métodos:**
 - `isPressed(key)`: Verifica se tecla foi pressionada neste frame
 - `isReleased(key)`: Verifica se tecla foi solta neste frame
 - `isHeld(key)`: Verifica se tecla está sendo mantida
+- `clearPressed()`: Remove apenas estados 'pressed'
+- `clearReleased()`: Remove apenas estados 'released'
+- `clear()`: Remove todos os estados
+
+### MouseState (`input/MouseState.ts`)
+
+**Responsabilidades:**
+- Rastrear posição do mouse relativa ao canvas
+- Gerenciar estado dos botões do mouse
+- Detectar cliques com posição
+
+**Propriedades:**
+- `x`, `y`: Posição atual do mouse
+
+**Métodos:**
+- `isPressed(button)`: Verifica se botão está pressionado
+- `wasClicked(button)`: Verifica se botão foi clicado neste frame
+- `getClickPosition(button)`: Obtém posição do clique
+- `clearClick(button)`: Limpa estado de clique de um botão
+- `clearAllClicks()`: Limpa todos os estados de clique
 
 ## 🎮 Estado Atual do Projeto
 
@@ -407,9 +510,12 @@ const state = inputSystem?.getState();
 
 - ✅ Arquitetura base de sistemas e cenas
 - ✅ Game loop com delta time
-- ✅ Sistema de input (teclado)
-- ✅ Renderização Canvas 2D básica
-- ✅ Cena de menu principal
+- ✅ Sistema de input (teclado e mouse)
+- ✅ Sistema de mouse com detecção de cliques e posição
+- ✅ Renderização Canvas 2D básica (texto e retângulos)
+- ✅ Cena de menu principal (MainMenuScene)
+- ✅ Cena de gameplay (Level01Scene) com movimento de player
+- ✅ Movimento de player com WASD e normalização de vetor
 - ✅ Hot reload em desenvolvimento
 - ✅ Build separado para main e renderer processes
 
