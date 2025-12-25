@@ -22,4 +22,28 @@ export class InputState {
     clear(): void {
         this.keys.clear();
     }
+
+    clearReleased(): void {
+        const keysToRemove: string[] = [];
+        for (const [key, state] of this.keys.entries()) {
+            if (state === 'released') {
+                keysToRemove.push(key);
+            }
+        }
+        for (const key of keysToRemove) {
+            this.keys.delete(key);
+        }
+    }
+
+    clearPressed(): void {
+        const keysToRemove: string[] = [];
+        for (const [key, state] of this.keys.entries()) {
+            if (state === 'pressed') {
+                keysToRemove.push(key);
+            }
+        }
+        for (const key of keysToRemove) {
+            this.keys.delete(key);
+        }
+    }
 }

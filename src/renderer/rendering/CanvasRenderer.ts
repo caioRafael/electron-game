@@ -51,4 +51,11 @@ export class CanvasRenderer {
     setTextAlign(align: CanvasTextAlign): void {
       this.ctx.textAlign = align;
     }
+
+    fillRect(x: number, y: number, width: number, height: number, color?: string): void {
+      if (color) {
+        this.ctx.fillStyle = color;
+      }
+      this.ctx.fillRect(x, y, width, height);
+    }
 }
