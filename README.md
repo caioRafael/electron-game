@@ -74,6 +74,11 @@ game/
 │       ├── rendering/            # Renderização
 │       │   └── CanvasRenderer.ts # Renderizador Canvas 2D
 │       │
+│       ├── ui/                   # Elementos de interface do usuário
+│       │   ├── UIElement.ts     # Classe base abstrata para elementos de UI
+│       │   ├── DebugFPS.ts      # Elemento de UI para exibir FPS
+│       │   └── PlayerStatus.ts  # Elemento de UI para status do player
+│       │
 │       └── scenes/               # Cenas do jogo
 │           ├── MainMenuScene.ts # Cena do menu principal
 │           └── Level01Scene.ts  # Cena de gameplay nível 01
@@ -282,17 +287,21 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 #### 8. **Sistema de Renderização**
 
 **RenderSystem (`systems/RenderSystem.ts`)**:
-- Centraliza a renderização de todas as entidades
-- Mantém ordem de renderização (primeiro registrado renderiza primeiro)
+- Centraliza a renderização de entidades e elementos de UI
+- Mantém ordem de renderização (world primeiro, depois UI)
 - Gerencia cor de fundo do canvas
+- Injeta referência do RenderSystem em entidades e elementos de UI automaticamente
 
 **Métodos principais:**
-- `registerEntity(entity)`: Registra entidade para renderização
-- `unregisterEntity(entity)`: Remove entidade
-- `render()`: Limpa canvas e renderiza todas as entidades
+- `registerWorld(entity)`: Registra entidade para renderização (injeta RenderSystem)
+- `unregisterWorld(entity)`: Remove entidade
+- `registerUI(element)`: Registra elemento de UI (injeta RenderSystem)
+- `unregisterUI(element)`: Remove elemento de UI
+- `render()`: Limpa canvas, renderiza entidades e depois elementos de UI
 - `renderEntities()`: Renderiza apenas entidades (sem limpar)
 - `setBackgroundColor(color)`: Define cor de fundo
-- `setRenderer(renderer)`: Define o CanvasRenderer
+- `setRenderer(renderer)`: Define o CanvasRenderer usado
+- `getRenderer()`: Obtém o CanvasRenderer usado
 
 #### 9. **Canvas Renderer (`CanvasRenderer.ts`)**
 
@@ -398,22 +407,24 @@ Cena de gameplay demonstrando movimento de player e colisões:
 
 ```typescript
 import { Scene } from "../engine/Scene";
-import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { InputSystem } from "../systems/InputSystem";
 import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { RenderSystem } from "../systems/RenderSystem";
 import { Player } from "../entities/Player";
 import { Wall } from "../entities/Wall";
+import { DebugFPS } from "../ui/DebugFPS";
 
 export class MyScene extends Scene {
     private player: Player;
     private wall: Wall;
+    private debugFPS: DebugFPS;
 
-    constructor(renderer: CanvasRenderer) {
+    constructor() {
         super();
-        this.renderer = renderer;
-        this.player = new Player(renderer);
-        this.wall = new Wall(renderer, 200, 200, 100, 20);
+        // Não precisa passar renderer - acesso automático via RenderSystem
+        this.player = new Player();
+        this.wall = new Wall(200, 200, 100, 20);
+        this.debugFPS = new DebugFPS();
     }
     
     onEnter(): void {
@@ -429,8 +440,9 @@ export class MyScene extends Scene {
         }
         
         if (renderSystem) {
-            renderSystem.registerEntity(this.wall); // Renderiza primeiro
-            renderSystem.registerEntity(this.player); // Renderiza por cima
+            renderSystem.registerWorld(this.wall); // Renderiza primeiro
+            renderSystem.registerWorld(this.player); // Renderiza por cima
+            renderSystem.registerUI(this.debugFPS); // Renderiza por último (sobre tudo)
         }
     }
     
@@ -439,12 +451,15 @@ export class MyScene extends Scene {
         const inputSystem = this.game?.getSystems(InputSystem);
         const input = inputSystem?.getState();
         
-        if (input) {
-            this.player.input = input;
+        // Usar sistema de ações (recomendado)
+        const actions = inputSystem?.getActions();
+        if (actions) {
+            this.player.actions = actions;
             this.player.update(delta);
         }
         
         this.wall.update(delta);
+        this.debugFPS.update(delta);
     }
     
     render(): void {
@@ -468,9 +483,18 @@ export class MyScene extends Scene {
         }
         
         if (renderSystem) {
-            renderSystem.unregisterEntity(this.player);
-            renderSystem.unregisterEntity(this.wall);
+            renderSystem.unregisterWorld(this.player);
+            renderSystem.unregisterWorld(this.wall);
+            renderSystem.unregisterUI(this.debugFPS);
         }
+    }
+}
+```
+
+2. Use a cena no `main.ts`:
+
+```typescript
+app.start(new MyScene());
     }
 }
 ```
@@ -515,10 +539,9 @@ this.game.addSystem(new MySystem());
 
 ```typescript
 import { Entity } from "./Entity";
-import { CanvasRenderer } from "../rendering/CanvasRenderer";
 
 export class MyEntity extends Entity {
-    constructor(renderer: CanvasRenderer, x: number, y: number) {
+    constructor(x: number, y: number) {
         super(x, y, 50, 50); // width, height
     }
     
@@ -527,7 +550,12 @@ export class MyEntity extends Entity {
     }
     
     render(): void {
+        // Acessa o renderer através do método getRenderer()
+        const renderer = this.getRenderer();
+        if (!renderer) return;
+        
         // Renderização usando CanvasRenderer
+        renderer.fillRect(this.x, this.y, this.width, this.height, '#ff0000');
     }
 }
 ```
@@ -535,12 +563,59 @@ export class MyEntity extends Entity {
 2. Use a entidade em uma cena:
 
 ```typescript
-const entity = new MyEntity(this.renderer, 100, 100);
+const entity = new MyEntity(100, 100);
 const physicsSystem = this.game?.getSystems(PhysicsSystem);
 const renderSystem = this.game?.getSystems(RenderSystem);
 
 physicsSystem?.registerEntity(entity);
-renderSystem?.registerEntity(entity);
+renderSystem?.registerWorld(entity); // Injeta RenderSystem automaticamente
+```
+
+### Criando um Novo Elemento de UI
+
+1. Crie um arquivo em `src/renderer/ui/`:
+
+```typescript
+import { UIElement } from "./UIElement";
+
+export class MyUIElement extends UIElement {
+    update(delta: number): void {
+        // Lógica de atualização (opcional)
+    }
+    
+    render(): void {
+        // Acessa o renderer através do método getRenderer()
+        const renderer = this.getRenderer();
+        if (!renderer) return;
+        
+        const canvas = renderer.getCanvas();
+        
+        // Renderização usando CanvasRenderer com posicionamento preciso
+        renderer.drawText('Meu Texto', 10, 10, {
+            font: '16px Arial',
+            color: '#ffffff',
+            verticalAlign: 'top',      // Evita corte no topo
+            horizontalAlign: 'left'
+        });
+        
+        // Exemplo: texto no canto superior direito
+        renderer.drawText('Score: 100', canvas.width - 10, 10, {
+            font: '20px Arial',
+            color: '#ffff00',
+            verticalAlign: 'top',
+            horizontalAlign: 'right'    // Alinha à direita
+        });
+    }
+}
+```
+
+2. Use o elemento de UI em uma cena:
+
+```typescript
+const uiElement = new MyUIElement();
+const renderSystem = this.game?.getSystems(RenderSystem);
+
+renderSystem?.registerUI(uiElement); // Injeta RenderSystem automaticamente
 ```
 
 ### Acessando Sistemas de uma Cena
@@ -570,8 +645,9 @@ physicsSystem?.unregisterEntity(myEntity);
 // Render System
 const renderSystem = this.game?.getSystems(RenderSystem);
 renderSystem?.setBackgroundColor('#000000');
-renderSystem?.registerEntity(myEntity);
-renderSystem?.render(); // Renderiza todas as entidades
+renderSystem?.registerWorld(myEntity); // Registra entidade (injeta RenderSystem)
+renderSystem?.registerUI(myUIElement); // Registra elemento de UI (injeta RenderSystem)
+renderSystem?.render(); // Renderiza todas as entidades e elementos de UI
 ```
 
 ## 📚 Componentes Principais
@@ -682,18 +758,22 @@ renderSystem?.render(); // Renderiza todas as entidades
 ### RenderSystem (`systems/RenderSystem.ts`)
 
 **Responsabilidades:**
-- Centralizar renderização de entidades
-- Gerenciar ordem de renderização
+- Centralizar renderização de entidades e elementos de UI
+- Gerenciar ordem de renderização (world primeiro, depois UI)
 - Controlar cor de fundo do canvas
+- Injetar referência do RenderSystem em entidades e elementos de UI
 
 **Métodos:**
-- `registerEntity(entity)`: Registra entidade para renderização
-- `unregisterEntity(entity)`: Remove entidade
-- `render()`: Limpa canvas e renderiza todas as entidades
+- `registerWorld(entity)`: Registra entidade para renderização (injeta RenderSystem)
+- `unregisterWorld(entity)`: Remove entidade
+- `registerUI(element)`: Registra elemento de UI para renderização (injeta RenderSystem)
+- `unregisterUI(element)`: Remove elemento de UI
+- `render()`: Limpa canvas, renderiza entidades do mundo e depois elementos de UI
 - `renderEntities()`: Renderiza apenas entidades (sem limpar canvas)
 - `clear()`: Limpa apenas o canvas
 - `setBackgroundColor(color)`: Define cor de fundo
 - `setRenderer(renderer)`: Define o CanvasRenderer usado
+- `getRenderer()`: Obtém o CanvasRenderer usado
 
 ### Entity (`entities/Entity.ts`)
 
