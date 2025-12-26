@@ -5,6 +5,8 @@ import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { RenderSystem } from "../systems/RenderSystem";
 import { Player } from "../entities/Player";
 import { Wall } from "../entities/Wall";
+import { ActionInput } from "../input/ActionInput";
+
 
 export class Level01Scene extends Scene {
     private player: Player;
@@ -73,12 +75,12 @@ export class Level01Scene extends Scene {
     update(delta: number): void {
         // Lógica de atualização do nível
         const inputSystem = this.game?.getSystems(InputSystem);
-        const input = inputSystem?.getState();
+        const actions = inputSystem?.getActions();
 
-        if(!input) return;
+        if(!actions) return;
 
         // Atualiza o input do player e então atualiza o player
-        this.player.input = input;
+        this.player.actions = actions;
         this.player.update(delta);
         
         // Atualiza a parede (mesmo que não faça nada por enquanto)

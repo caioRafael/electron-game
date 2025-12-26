@@ -2,13 +2,16 @@ import { Entity } from "./Entity";
 import { InputState } from "../input/InputState";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { PhysicsBody } from "../physics/PhysicsBody";
+import { ActionInput } from "../input/ActionInput";
+import { InputAction } from "../input/InputAction";
 
 export class Player extends Entity implements PhysicsBody {
     vx: number = 0;
     vy: number = 0;
     solid: boolean = true;
     speed: number = 200; // pixels por segundo
-    input?: InputState;
+    // input?: InputState;
+    actions?: ActionInput;
     private renderer: CanvasRenderer;
 
     constructor(renderer: CanvasRenderer, x: number = 0, y: number = 0) {
@@ -32,35 +35,25 @@ export class Player extends Entity implements PhysicsBody {
     }
 
     update(delta: number): void {
-        if (!this.input) return;
-
-        // Usa isHeld para detectar teclas mantidas pressionadas
-        const wPressed = this.input.isHeld('w') || this.input.isPressed('w');
-        const aPressed = this.input.isHeld('a') || this.input.isPressed('a');
-        const sPressed = this.input.isHeld('s') || this.input.isPressed('s');
-        const dPressed = this.input.isHeld('d') || this.input.isPressed('d');
-
-        // Calcula o vetor de direção do movimento
+        if (!this.actions) return;
+    
         let moveX = 0;
         let moveY = 0;
-
-        if(wPressed) moveY -= 1;
-        if(sPressed) moveY += 1;
-        if(aPressed) moveX -= 1;
-        if(dPressed) moveX += 1;
-
-        // Normaliza o vetor para manter velocidade consistente em diagonais
+    
+        if (this.actions.isHeld(InputAction.MOVE_UP)) moveY -= 1;
+        if (this.actions.isHeld(InputAction.MOVE_DOWN)) moveY += 1;
+        if (this.actions.isHeld(InputAction.MOVE_LEFT)) moveX -= 1;
+        if (this.actions.isHeld(InputAction.MOVE_RIGHT)) moveX += 1;
+    
         const magnitude = Math.sqrt(moveX * moveX + moveY * moveY);
         if (magnitude > 0) {
-            moveX /= magnitude;
-            moveY /= magnitude;
+          moveX /= magnitude;
+          moveY /= magnitude;
         }
-
-        // Aplica o movimento baseado no delta time
-        const moveDistance = this.speed * delta;
-        this.x += moveX * moveDistance;
-        this.y += moveY * moveDistance;
-    }
+    
+        this.x += moveX * this.speed * delta;
+        this.y += moveY * this.speed * delta;
+      }
 
     render(): void {
         // Desenha o player na posição atual usando width e height da Entity

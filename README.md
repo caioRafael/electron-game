@@ -69,7 +69,10 @@ game/
 │       │
 │       ├── input/                # Gerenciamento de input
 │       │   ├── InputState.ts    # Estado das teclas pressionadas
-│       │   └── MouseState.ts    # Estado do mouse (posição e botões)
+│       │   ├── MouseState.ts    # Estado do mouse (posição e botões)
+│       │   ├── InputAction.ts   # Enum de ações do jogo
+│       │   ├── ActionInput.ts   # Sistema de ações baseado em bindings
+│       │   └── DefaultInputBindings.ts # Bindings padrão de teclas
 │       │
 │       ├── rendering/            # Renderização
 │       │   └── CanvasRenderer.ts # Renderizador Canvas 2D
@@ -211,6 +214,7 @@ Interface para componentes modulares:
 - Atualiza o estado das teclas e do mouse
 - Limpa estados temporários após cada frame (mantém estados 'held')
 - Gerencia transições de estado: pressed → held → released
+- Fornece acesso a ações do jogo através de `ActionInput`
 
 **InputState (`InputState.ts`)**:
 - Armazena o estado das teclas (pressed, released, held)
@@ -223,13 +227,50 @@ Interface para componentes modulares:
 - Detecta cliques com posição: `wasClicked()`, `getClickPosition()`
 - Limpeza de estados de clique: `clearClick()`, `clearAllClicks()`
 
-**Uso:**
+**Sistema de Ações (`ActionInput.ts`)**:
+- Abstrai teclas físicas em ações do jogo (ex: MOVE_UP, JUMP, ATTACK)
+- Permite múltiplas teclas para a mesma ação (ex: WASD ou setas)
+- Facilita remapeamento de controles
+- Métodos: `isPressed(action)`, `isHeld(action)`, `isReleased(action)`
+
+**InputAction (`InputAction.ts`)**:
+- Enum com todas as ações disponíveis no jogo:
+  - `MOVE_UP`, `MOVE_DOWN`, `MOVE_LEFT`, `MOVE_RIGHT`
+  - `JUMP`, `ATTACK`
+
+**DefaultInputBindings (`DefaultInputBindings.ts`)**:
+- Mapeamento padrão de ações para teclas:
+  - `MOVE_UP`: 'w', 'ArrowUp'
+  - `MOVE_DOWN`: 's', 'ArrowDown'
+  - `MOVE_LEFT`: 'a', 'ArrowLeft'
+  - `MOVE_RIGHT`: 'd', 'ArrowRight'
+  - `JUMP`: ' ' (espaço)
+  - `ATTACK`: 'Mouse0' (botão esquerdo do mouse)
+
+**Uso com Sistema de Ações (Recomendado):**
+```typescript
+const inputSystem = this.game?.getSystems(InputSystem);
+const actions = inputSystem?.getActions();
+
+// Usar ações ao invés de teclas diretamente
+if (actions?.isPressed(InputAction.JUMP)) {
+    // Pular
+}
+if (actions?.isHeld(InputAction.MOVE_UP)) {
+    // Mover para cima (funciona com 'w' ou 'ArrowUp')
+}
+if (actions?.isHeld(InputAction.ATTACK)) {
+    // Atacar
+}
+```
+
+**Uso com InputState (Acesso direto a teclas):**
 ```typescript
 const inputSystem = this.game?.getSystems(InputSystem);
 const input = inputSystem?.getState();
 const mouse = inputSystem?.getMouseState();
 
-// Teclado
+// Teclado direto
 if (input?.isPressed('Enter')) {
     // Ação no primeiro frame que Enter é pressionado
 }
@@ -384,7 +425,8 @@ Cena inicial do jogo que exibe o menu principal:
 #### Level01Scene
 Cena de gameplay demonstrando movimento de player e colisões:
 - Player representado por um retângulo vermelho
-- Movimento com WASD (w=up, a=left, s=down, d=right)
+- Movimento usando sistema de ações (MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT)
+- Suporta múltiplas teclas: WASD ou setas do teclado
 - Normalização de vetor de movimento para velocidade consistente em diagonais
 - Movimento baseado em delta time (200 pixels/segundo)
 - Player inicializado no centro da tela
@@ -404,6 +446,7 @@ import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { RenderSystem } from "../systems/RenderSystem";
 import { Player } from "../entities/Player";
 import { Wall } from "../entities/Wall";
+import { InputAction } from "../input/InputAction";
 
 export class MyScene extends Scene {
     private player: Player;
@@ -435,13 +478,22 @@ export class MyScene extends Scene {
     }
     
     update(delta: number): void {
-        // Acessar input
+        // Acessar sistema de ações (recomendado)
         const inputSystem = this.game?.getSystems(InputSystem);
-        const input = inputSystem?.getState();
+        const actions = inputSystem?.getActions();
         
-        if (input) {
-            this.player.input = input;
+        // Usar sistema de ações (recomendado)
+        if (actions) {
+            this.player.actions = actions;
             this.player.update(delta);
+        }
+        
+        // Exemplo de uso direto de ações
+        if (actions?.isPressed(InputAction.JUMP)) {
+            // Pular
+        }
+        if (actions?.isHeld(InputAction.MOVE_UP)) {
+            // Mover para cima
         }
         
         this.wall.update(delta);
@@ -546,14 +598,28 @@ renderSystem?.registerEntity(entity);
 ### Acessando Sistemas de uma Cena
 
 ```typescript
-// Input System
+// Input System - Sistema de Ações (Recomendado)
 const inputSystem = this.game?.getSystems(InputSystem);
+const actions = inputSystem?.getActions();
+
+// Usar ações do jogo
+if (actions?.isHeld(InputAction.MOVE_UP)) {
+    // Mover para cima (funciona com 'w' ou 'ArrowUp')
+}
+if (actions?.isPressed(InputAction.JUMP)) {
+    // Pular
+}
+if (actions?.isHeld(InputAction.ATTACK)) {
+    // Atacar
+}
+
+// Input System - Acesso direto a teclas (se necessário)
 const inputState = inputSystem?.getState();
 const mouseState = inputSystem?.getMouseState();
 
-// Verificar teclado
+// Verificar teclado direto
 if (inputState?.isHeld('w')) {
-    // Mover para cima
+    // Mover para cima (apenas 'w')
 }
 
 // Verificar mouse
@@ -624,10 +690,12 @@ renderSystem?.render(); // Renderiza todas as entidades
 - Manter estado das teclas e do mouse
 - Gerenciar transições de estado (pressed → held → released)
 - Limpar estados temporários após cada frame
+- Fornecer sistema de ações baseado em bindings
 
 **Métodos:**
 - `getState()`: Retorna o estado atual do input (InputState)
 - `getMouseState()`: Retorna o estado atual do mouse (MouseState)
+- `getActions()`: Retorna o sistema de ações (ActionInput)
 
 ### InputState (`input/InputState.ts`)
 
@@ -660,6 +728,40 @@ renderSystem?.render(); // Renderiza todas as entidades
 - `getClickPosition(button)`: Obtém posição do clique
 - `clearClick(button)`: Limpa estado de clique de um botão
 - `clearAllClicks()`: Limpa todos os estados de clique
+
+### ActionInput (`input/ActionInput.ts`)
+
+**Responsabilidades:**
+- Abstrair teclas físicas em ações do jogo
+- Permitir múltiplas teclas para a mesma ação
+- Facilitar remapeamento de controles
+
+**Métodos:**
+- `isPressed(action)`: Verifica se ação foi pressionada neste frame
+- `isHeld(action)`: Verifica se ação está sendo mantida
+- `isReleased(action)`: Verifica se ação foi solta neste frame
+
+**Vantagens:**
+- Código mais legível (usa `MOVE_UP` ao invés de `'w'`)
+- Suporta múltiplas teclas por ação automaticamente
+- Fácil de remapear controles (mudar apenas os bindings)
+
+### InputAction (`input/InputAction.ts`)
+
+**Enum com ações disponíveis:**
+- `MOVE_UP`: Mover para cima
+- `MOVE_DOWN`: Mover para baixo
+- `MOVE_LEFT`: Mover para esquerda
+- `MOVE_RIGHT`: Mover para direita
+- `JUMP`: Pular
+- `ATTACK`: Atacar
+
+### DefaultInputBindings (`input/DefaultInputBindings.ts`)
+
+**Mapeamento padrão de ações para teclas:**
+- Cada ação pode ter múltiplas teclas associadas
+- Facilita suporte a diferentes layouts de teclado
+- Pode ser customizado para diferentes jogadores
 
 ### PhysicsSystem (`systems/PhysicsSystem.ts`)
 
@@ -724,6 +826,8 @@ renderSystem?.render(); // Renderiza todas as entidades
 - ✅ Arquitetura base de sistemas e cenas
 - ✅ Game loop com delta time
 - ✅ Sistema de input (teclado e mouse)
+- ✅ Sistema de ações baseado em bindings (ActionInput)
+- ✅ Suporte a múltiplas teclas por ação
 - ✅ Sistema de mouse com detecção de cliques e posição
 - ✅ Sistema de física com detecção e resolução de colisões (AABB)
 - ✅ Sistema de renderização centralizado

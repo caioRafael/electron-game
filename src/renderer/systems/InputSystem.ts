@@ -1,8 +1,11 @@
 import { System } from "../engine/System";
+import { ActionInput } from "../input/ActionInput";
+import { DefaultInputBindings } from "../input/DefaultInputBindings";
 import { InputState } from "../input/InputState";
 import { MouseButton, MouseState } from "../input/MouseState";
 
 export class InputSystem implements System {
+    private actionInput!: ActionInput;
     private state = new InputState();
     private mouseState = new MouseState();
     private pressedKeys = new Set<string>();
@@ -13,6 +16,8 @@ export class InputSystem implements System {
         window.addEventListener('mousemove', this.onMouseMove.bind(this));
         window.addEventListener('mousedown', this.onMouseDown.bind(this));
         window.addEventListener('mouseup', this.onMouseUp.bind(this));
+
+        this.actionInput = new ActionInput(this.state, DefaultInputBindings);
     }
 
     onUpdate(delta: number): void {
@@ -73,5 +78,9 @@ export class InputSystem implements System {
 
     getMouseState(): MouseState {
         return this.mouseState;
+    }
+
+    getActions(): ActionInput {
+        return this.actionInput;
     }
 }
