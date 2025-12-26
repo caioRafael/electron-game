@@ -23,6 +23,7 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de input**: Captura e processamento de eventos de teclado e mouse
 - **Sistema de física**: Detecção e resolução de colisões entre entidades
 - **Sistema de renderização**: Renderização centralizada de entidades
+- **Sistema de câmera**: Câmera que segue entidades e aplica transformações de visualização
 - **Sistema de entidades**: Arquitetura baseada em entidades com componentes
 - **Renderização Canvas**: Renderização 2D usando Canvas API
 - **Hot Reload**: Recarregamento automático durante o desenvolvimento
@@ -57,7 +58,8 @@ game/
 │       ├── systems/              # Sistemas do jogo
 │       │   ├── InputSystem.ts   # Sistema de input (teclado e mouse)
 │       │   ├── PhysicsSystem.ts # Sistema de física e colisões
-│       │   └── RenderSystem.ts  # Sistema de renderização
+│       │   ├── RenderSystem.ts  # Sistema de renderização
+│       │   └── CameraSystem.ts  # Sistema de câmera
 │       │
 │       ├── entities/             # Entidades do jogo
 │       │   ├── Entity.ts        # Classe base abstrata para entidades
@@ -72,7 +74,8 @@ game/
 │       │   └── MouseState.ts    # Estado do mouse (posição e botões)
 │       │
 │       ├── rendering/            # Renderização
-│       │   └── CanvasRenderer.ts # Renderizador Canvas 2D
+│       │   ├── CanvasRenderer.ts # Renderizador Canvas 2D
+│       │   └── Camera.ts         # Classe de câmera
 │       │
 │       ├── ui/                   # Elementos de interface do usuário
 │       │   ├── UIElement.ts     # Classe base abstrata para elementos de UI
@@ -167,6 +170,7 @@ Classe central que coordena todos os componentes:
 3. Systems.onUpdate(delta)  → Processamento de sistemas
    - InputSystem: clearPressed(), clearReleased(), clearAllClicks()
    - PhysicsSystem: Detecção e resolução de colisões
+   - CameraSystem: Atualiza posição da câmera para seguir o alvo
    - RenderSystem: Não faz nada (renderização é feita pela cena)
 ```
 
@@ -284,11 +288,41 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 - `unregisterEntity(entity)`: Remove entidade
 - `clearEntities()`: Limpa todas as entidades
 
-#### 8. **Sistema de Renderização**
+#### 8. **Sistema de Câmera**
+
+**CameraSystem (`systems/CameraSystem.ts`)**:
+- Gerencia a posição e movimento da câmera
+- Segue automaticamente uma entidade alvo
+- Centraliza o alvo na tela
+- Atualiza a posição da câmera a cada frame
+
+**Camera (`rendering/Camera.ts`)**:
+- Representa a viewport da câmera
+- Propriedades: `x`, `y` (posição), `width`, `height` (tamanho da viewport)
+
+**Métodos principais:**
+- `getCamera()`: Retorna a instância da câmera
+- `follow(target)`: Define uma entidade para a câmera seguir
+  - `target`: Objeto com `x`, `y`, `width`, `height`
+
+**Como funciona:**
+- A câmera calcula sua posição para centralizar o alvo na viewport
+- A posição é atualizada no `onUpdate()` do sistema
+- O RenderSystem aplica a transformação da câmera ao renderizar o mundo
+
+**Uso:**
+```typescript
+const cameraSystem = this.game?.getSystems(CameraSystem);
+cameraSystem?.follow(this.player); // Câmera segue o player
+```
+
+#### 9. **Sistema de Renderização**
 
 **RenderSystem (`systems/RenderSystem.ts`)**:
 - Centraliza a renderização de entidades e elementos de UI
 - Mantém ordem de renderização (world primeiro, depois UI)
+- Aplica transformação da câmera ao renderizar o mundo
+- Elementos de UI não são afetados pela câmera (sempre fixos na tela)
 - Gerencia cor de fundo do canvas
 - Injeta referência do RenderSystem em entidades e elementos de UI automaticamente
 
@@ -297,13 +331,18 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 - `unregisterWorld(entity)`: Remove entidade
 - `registerUI(element)`: Registra elemento de UI (injeta RenderSystem)
 - `unregisterUI(element)`: Remove elemento de UI
-- `render()`: Limpa canvas, renderiza entidades e depois elementos de UI
+- `render()`: Limpa canvas, aplica câmera, renderiza entidades e depois elementos de UI
 - `renderEntities()`: Renderiza apenas entidades (sem limpar)
 - `setBackgroundColor(color)`: Define cor de fundo
 - `setRenderer(renderer)`: Define o CanvasRenderer usado
 - `getRenderer()`: Obtém o CanvasRenderer usado
 
-#### 9. **Canvas Renderer (`CanvasRenderer.ts`)**
+**Transformação da Câmera:**
+- O mundo é renderizado com `translate(-camera.x, -camera.y)`
+- Isso faz com que entidades sejam deslocadas baseadas na posição da câmera
+- Elementos de UI são renderizados após restaurar a transformação (fixos na tela)
+
+#### 10. **Canvas Renderer (`CanvasRenderer.ts`)**
 
 Abstração sobre Canvas API para renderização 2D:
 
@@ -430,6 +469,10 @@ export class MyScene extends Scene {
     onEnter(): void {
         console.log("Cena iniciada");
         
+        // Configura a câmera para seguir o player
+        const cameraSystem = this.game?.getSystems(CameraSystem);
+        cameraSystem?.follow(this.player);
+        
         // Registra entidades nos sistemas
         const physicsSystem = this.game?.getSystems(PhysicsSystem);
         const renderSystem = this.game?.getSystems(RenderSystem);
@@ -442,7 +485,7 @@ export class MyScene extends Scene {
         if (renderSystem) {
             renderSystem.registerWorld(this.wall); // Renderiza primeiro
             renderSystem.registerWorld(this.player); // Renderiza por cima
-            renderSystem.registerUI(this.debugFPS); // Renderiza por último (sobre tudo)
+            renderSystem.registerUI(this.debugFPS); // Renderiza por último (sobre tudo, fixo na tela)
         }
     }
     
@@ -642,12 +685,17 @@ const physicsSystem = this.game?.getSystems(PhysicsSystem);
 physicsSystem?.registerEntity(myEntity);
 physicsSystem?.unregisterEntity(myEntity);
 
+// Camera System
+const cameraSystem = this.game?.getSystems(CameraSystem);
+cameraSystem?.follow(myEntity); // Câmera segue a entidade
+const camera = cameraSystem?.getCamera(); // Obtém a câmera
+
 // Render System
 const renderSystem = this.game?.getSystems(RenderSystem);
 renderSystem?.setBackgroundColor('#000000');
 renderSystem?.registerWorld(myEntity); // Registra entidade (injeta RenderSystem)
 renderSystem?.registerUI(myUIElement); // Registra elemento de UI (injeta RenderSystem)
-renderSystem?.render(); // Renderiza todas as entidades e elementos de UI
+renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com câmera aplicada)
 ```
 
 ## 📚 Componentes Principais
@@ -755,11 +803,40 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI
 - Move entidade na direção de menor sobreposição
 - Zera velocidade (`vx`/`vy`) quando aplicável
 
+### CameraSystem (`systems/CameraSystem.ts`)
+
+**Responsabilidades:**
+- Gerenciar posição e movimento da câmera
+- Seguir automaticamente uma entidade alvo
+- Centralizar o alvo na viewport
+
+**Métodos:**
+- `getCamera()`: Retorna a instância da câmera
+- `follow(target)`: Define uma entidade para a câmera seguir
+  - O `target` deve ter propriedades: `x`, `y`, `width`, `height`
+
+**Como funciona:**
+- Calcula a posição da câmera para centralizar o alvo
+- Atualiza `camera.x` e `camera.y` no `onUpdate()`
+- O RenderSystem usa essas coordenadas para aplicar transformação
+
+### Camera (`rendering/Camera.ts`)
+
+**Responsabilidades:**
+- Representar a viewport da câmera
+- Armazenar posição e dimensões
+
+**Propriedades:**
+- `x`, `y`: Posição da câmera no mundo
+- `width`, `height`: Tamanho da viewport (geralmente igual ao tamanho do canvas)
+
 ### RenderSystem (`systems/RenderSystem.ts`)
 
 **Responsabilidades:**
 - Centralizar renderização de entidades e elementos de UI
 - Gerenciar ordem de renderização (world primeiro, depois UI)
+- Aplicar transformação da câmera ao renderizar o mundo
+- Elementos de UI não são afetados pela câmera (fixos na tela)
 - Controlar cor de fundo do canvas
 - Injetar referência do RenderSystem em entidades e elementos de UI
 
@@ -768,12 +845,17 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI
 - `unregisterWorld(entity)`: Remove entidade
 - `registerUI(element)`: Registra elemento de UI para renderização (injeta RenderSystem)
 - `unregisterUI(element)`: Remove elemento de UI
-- `render()`: Limpa canvas, renderiza entidades do mundo e depois elementos de UI
+- `render()`: Limpa canvas, aplica câmera, renderiza entidades e depois elementos de UI
 - `renderEntities()`: Renderiza apenas entidades (sem limpar canvas)
 - `clear()`: Limpa apenas o canvas
 - `setBackgroundColor(color)`: Define cor de fundo
 - `setRenderer(renderer)`: Define o CanvasRenderer usado
 - `getRenderer()`: Obtém o CanvasRenderer usado
+
+**Transformação da Câmera:**
+- Usa `translate(-camera.x, -camera.y)` antes de renderizar o mundo
+- Isso desloca todas as entidades baseado na posição da câmera
+- Restaura a transformação antes de renderizar UI (UI fica fixa)
 
 ### Entity (`entities/Entity.ts`)
 
@@ -807,6 +889,8 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI
 - ✅ Sistema de mouse com detecção de cliques e posição
 - ✅ Sistema de física com detecção e resolução de colisões (AABB)
 - ✅ Sistema de renderização centralizado
+- ✅ Sistema de câmera que segue entidades
+- ✅ Transformação de câmera aplicada ao mundo (UI fixa na tela)
 - ✅ Sistema de entidades (Entity, Player, Wall)
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Cena de menu principal (MainMenuScene)

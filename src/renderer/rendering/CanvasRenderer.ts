@@ -82,6 +82,10 @@ export class CanvasRenderer {
       this.ctx.restore();
     }
 
+    translate(x: number, y: number): void {
+      this.ctx.translate(x, y);
+    }
+
     setTextAlign(align: CanvasTextAlign): void {
       this.ctx.textAlign = align;
     }

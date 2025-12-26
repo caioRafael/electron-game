@@ -5,6 +5,8 @@ import { Scene } from "./engine/Scene";
 import { InputSystem } from "./systems/InputSystem";
 import { PhysicsSystem } from "./systems/PhysicsSystem";
 import { RenderSystem } from "./systems/RenderSystem";
+import { Camera } from "./rendering/Camera";
+import { CameraSystem } from "./systems/CameraSystem";
 
 export class App {
     private game: Game;
@@ -16,11 +18,17 @@ export class App {
         const loop = new Loop();
         this.game = new Game(loop);
 
+        const camera = new Camera(
+            renderer.getCanvas().width,
+            renderer.getCanvas().height
+        )
+        
         this.game.addSystem(new InputSystem());
+        this.game.addSystem(new CameraSystem(camera));
         this.game.addSystem(new PhysicsSystem());
         
         // Cria e configura o RenderSystem com o renderer
-        const renderSystem = new RenderSystem(renderer);
+        const renderSystem = new RenderSystem(renderer, camera);
         this.game.addSystem(renderSystem);
     }
 

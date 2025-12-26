@@ -2,16 +2,18 @@ import { System } from "../engine/System";
 import { Entity } from "../entities/Entity";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { UIElement } from "../ui/UIElement";
+import { Camera } from "../rendering/Camera";
 
 export class RenderSystem implements System {
     // private entities: Entity[] = [];
     private world: Entity[] = [];
     private ui: UIElement[] = []
     private backgroundColor: string = '#1e1e1e';
+    private camera: Camera;
     private renderer?: CanvasRenderer;
-
-    constructor(renderer?: CanvasRenderer) {
+    constructor(renderer: CanvasRenderer, camera: Camera) {
         this.renderer = renderer;
+        this.camera = camera;
     }
 
     /**
@@ -106,11 +108,18 @@ export class RenderSystem implements System {
         // Limpa o canvas com a cor de fundo
         this.renderer.clear(this.backgroundColor);
 
+        //WOLRD
+        this.renderer.save();
+        this.renderer.translate(-this.camera.x, -this.camera.y);
+
         // Renderiza todas as entidades na ordem de registro
         for (const entity of this.world) {
             entity.render();
         }
+        
+        this.renderer.restore();
 
+        //UI
         for (const element of this.ui) {
             element.render();
         }

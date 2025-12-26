@@ -1,5 +1,4 @@
 import { Entity } from "./Entity";
-import { InputState } from "../input/InputState";
 import { PhysicsBody } from "../physics/PhysicsBody";
 import { ActionInput } from "../input/ActionInput";
 import { InputAction } from "../input/InputAction";
