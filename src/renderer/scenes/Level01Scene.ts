@@ -1,16 +1,21 @@
 import { Scene } from "../engine/Scene";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { InputSystem } from "../systems/InputSystem";
+import { PhysicsSystem } from "../systems/PhysicsSystem";
+import { RenderSystem } from "../systems/RenderSystem";
+import { Player } from "../entities/Player";
+import { Wall } from "../entities/Wall";
 
 export class Level01Scene extends Scene {
-    private playerX: number = 0;
-    private playerY: number = 0;
-    private playerSize: number = 100;
-    private playerSpeed: number = 200; // pixels por segundo
+    private player: Player;
+    private wall: Wall;
 
     constructor(renderer: CanvasRenderer){
         super();
         this.renderer = renderer;
+        this.player = new Player(renderer);
+        // Cria uma parede no mapa (exemplo: parede horizontal no topo)
+        this.wall = new Wall(renderer, 500, 300, 200, 20);
     }
 
     /**
@@ -21,8 +26,23 @@ export class Level01Scene extends Scene {
         // Inicializa o player no centro da tela
         if (this.renderer) {
             const canvas = this.renderer.getCanvas();
-            this.playerX = canvas.width / 2 - this.playerSize / 2;
-            this.playerY = canvas.height / 2 - this.playerSize / 2;
+            this.player.x = canvas.width / 2 - this.player.width / 2;
+            this.player.y = canvas.height / 2 - this.player.height / 2;
+        }
+
+        // Registra as entidades no sistema de física
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+        if (physicsSystem) {
+            physicsSystem.registerEntity(this.player);
+            physicsSystem.registerEntity(this.wall);
+        }
+
+        // Registra as entidades no sistema de renderização
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        if (renderSystem) {
+            // Registra na ordem: primeiro as que ficam atrás (parede), depois as da frente (player)
+            renderSystem.registerEntity(this.wall);
+            renderSystem.registerEntity(this.player);
         }
     }
 
@@ -31,6 +51,20 @@ export class Level01Scene extends Scene {
      */
     onExit(): void {
         console.log('Level01Scene: onExit');
+        
+        // Remove as entidades do sistema de física
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+        if (physicsSystem) {
+            physicsSystem.unregisterEntity(this.player);
+            physicsSystem.unregisterEntity(this.wall);
+        }
+
+        // Remove as entidades do sistema de renderização
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        if (renderSystem) {
+            renderSystem.unregisterEntity(this.player);
+            renderSystem.unregisterEntity(this.wall);
+        }
     }
 
     /**
@@ -41,45 +75,31 @@ export class Level01Scene extends Scene {
         const inputSystem = this.game?.getSystems(InputSystem);
         const input = inputSystem?.getState();
 
-        if(!input) return
+        if(!input) return;
 
-        // Usa isHeld para detectar teclas mantidas pressionadas
-        const wPressed = input.isHeld('w') || input.isPressed('w');
-        const aPressed = input.isHeld('a') || input.isPressed('a');
-        const sPressed = input.isHeld('s') || input.isPressed('s');
-        const dPressed = input.isHeld('d') || input.isPressed('d');
-
-        // Calcula o vetor de direção do movimento
-        let moveX = 0;
-        let moveY = 0;
-
-        if(wPressed) moveY -= 1;
-        if(sPressed) moveY += 1;
-        if(aPressed) moveX -= 1;
-        if(dPressed) moveX += 1;
-
-        // Normaliza o vetor para manter velocidade consistente em diagonais
-        const magnitude = Math.sqrt(moveX * moveX + moveY * moveY);
-        if (magnitude > 0) {
-            moveX /= magnitude;
-            moveY /= magnitude;
-        }
-
-        // Aplica o movimento baseado no delta time
-        const moveDistance = this.playerSpeed * delta;
-        this.playerX += moveX * moveDistance;
-        this.playerY += moveY * moveDistance;
+        // Atualiza o input do player e então atualiza o player
+        this.player.input = input;
+        this.player.update(delta);
+        
+        // Atualiza a parede (mesmo que não faça nada por enquanto)
+        this.wall.update(delta);
     }
 
     /**
      * Renderização gráfica
      */
     render(): void {
-        if (!this.renderer) return;
-        this.renderer.clear('#1e1e1e'); // Limpa com cor de fundo
-        
-        // Desenha o player na posição atual
-        this.renderer.fillRect(this.playerX, this.playerY, this.playerSize, this.playerSize, '#ff0000');
+        // Usa o RenderSystem para renderizar todas as entidades
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        if (renderSystem) {
+            renderSystem.render();
+        } else {
+            // Fallback: renderização manual se o RenderSystem não estiver disponível
+            if (!this.renderer) return;
+            this.renderer.clear('#1e1e1e');
+            this.wall.render();
+            this.player.render();
+        }
     }
 }
 

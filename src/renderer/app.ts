@@ -3,6 +3,8 @@ import { Loop } from "./engine/Loop";
 import { CanvasRenderer } from "./rendering/CanvasRenderer";
 import { Scene } from "./engine/Scene";
 import { InputSystem } from "./systems/InputSystem";
+import { PhysicsSystem } from "./systems/PhysicsSystem";
+import { RenderSystem } from "./systems/RenderSystem";
 
 export class App {
     private game: Game;
@@ -15,6 +17,11 @@ export class App {
         this.game = new Game(loop);
 
         this.game.addSystem(new InputSystem());
+        this.game.addSystem(new PhysicsSystem());
+        
+        // Cria e configura o RenderSystem com o renderer
+        const renderSystem = new RenderSystem(renderer);
+        this.game.addSystem(renderSystem);
     }
 
     private setupCanvas(): void {

@@ -21,6 +21,9 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de cenas**: Gerenciamento de diferentes estados do jogo (menu, gameplay, etc.)
 - **Game Loop**: Loop de atualização baseado em `requestAnimationFrame` com cálculo de delta time
 - **Sistema de input**: Captura e processamento de eventos de teclado e mouse
+- **Sistema de física**: Detecção e resolução de colisões entre entidades
+- **Sistema de renderização**: Renderização centralizada de entidades
+- **Sistema de entidades**: Arquitetura baseada em entidades com componentes
 - **Renderização Canvas**: Renderização 2D usando Canvas API
 - **Hot Reload**: Recarregamento automático durante o desenvolvimento
 
@@ -52,7 +55,17 @@ game/
 │       │   └── System.ts        # Interface para sistemas
 │       │
 │       ├── systems/              # Sistemas do jogo
-│       │   └── InputSystem.ts   # Sistema de input (teclado)
+│       │   ├── InputSystem.ts   # Sistema de input (teclado e mouse)
+│       │   ├── PhysicsSystem.ts # Sistema de física e colisões
+│       │   └── RenderSystem.ts  # Sistema de renderização
+│       │
+│       ├── entities/             # Entidades do jogo
+│       │   ├── Entity.ts        # Classe base abstrata para entidades
+│       │   ├── Player.ts        # Entidade do jogador
+│       │   └── Wall.ts          # Entidade de parede
+│       │
+│       ├── physics/              # Sistema de física
+│       │   └── PhysicsBody.ts   # Interface para corpos físicos
 │       │
 │       ├── input/                # Gerenciamento de input
 │       │   ├── InputState.ts    # Estado das teclas pressionadas
@@ -99,16 +112,19 @@ O projeto segue uma arquitetura em camadas com separação clara de responsabili
 │         │               │           │
 │  ┌──────▼──────┐  ┌────▼────────┐ │
 │  │   Loop      │  │   Systems   │ │
-│  │ (Game Loop)  │  │  (Input,    │ │
-│  │             │  │   etc.)     │ │
-│  └──────┬──────┘  └────┬────────┘ │
+│  │ (Game Loop)  │  │  (Input,   │ │
+│  │             │  │   Physics, │ │
+│  └──────┬──────┘  │   Render)  │ │
+│         │         └────┬────────┘ │
 │         │              │           │
 │  ┌──────▼──────────────▼───────┐  │
 │  │         Scene                │  │
 │  │  (Estado atual do jogo)      │  │
+│  │  - Entities (Player, Wall)   │  │
 │  └──────┬───────────────────────┘  │
 │         │                           │
 │  ┌──────▼───────────────────────┐  │
+│  │    RenderSystem               │  │
 │  │    CanvasRenderer             │  │
 │  │    (Renderização 2D)          │  │
 │  └──────────────────────────────┘  │
@@ -141,11 +157,12 @@ Classe central que coordena todos os componentes:
 
 **Fluxo de atualização:**
 ```
-1. Scene.update(delta)    → Lógica da cena (input, física, etc.)
-2. Scene.render()          → Renderização
-3. Systems.onUpdate(delta)  → Limpeza de estados temporários
+1. Scene.update(delta)    → Lógica da cena (input, atualização de entidades)
+2. Scene.render()          → Renderização (usa RenderSystem)
+3. Systems.onUpdate(delta)  → Processamento de sistemas
    - InputSystem: clearPressed(), clearReleased(), clearAllClicks()
-   - Mantém estados 'held' para teclas pressionadas continuamente
+   - PhysicsSystem: Detecção e resolução de colisões
+   - RenderSystem: Não faz nada (renderização é feita pela cena)
 ```
 
 #### 3. **Sistema de Cenas (`Scene.ts`)**
@@ -184,6 +201,8 @@ Interface para componentes modulares:
 
 **Sistemas disponíveis:**
 - `InputSystem`: Captura eventos de teclado e mouse
+- `PhysicsSystem`: Detecta e resolve colisões entre entidades
+- `RenderSystem`: Gerencia renderização centralizada de entidades
 
 #### 5. **Sistema de Input**
 
@@ -225,7 +244,57 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 }
 ```
 
-#### 6. **Canvas Renderer (`CanvasRenderer.ts`)**
+#### 6. **Sistema de Entidades**
+
+**Entity (`entities/Entity.ts`)**:
+- Classe abstrata base para todas as entidades do jogo
+- Propriedades: `x`, `y`, `width`, `height`
+- Métodos abstratos: `update(delta)`, `render()`
+
+**Player (`entities/Player.ts`)**:
+- Entidade controlável pelo jogador
+- Implementa `PhysicsBody` (vx, vy, solid)
+- Movimento com WASD
+- Normalização de vetor para movimento diagonal consistente
+
+**Wall (`entities/Wall.ts`)**:
+- Entidade estática (parede)
+- Implementa `Partial<PhysicsBody>` (apenas `solid`)
+- Não se move, apenas bloqueia outras entidades
+
+#### 7. **Sistema de Física**
+
+**PhysicsSystem (`systems/PhysicsSystem.ts`)**:
+- Gerencia detecção e resolução de colisões
+- Usa AABB (Axis-Aligned Bounding Box) para detecção
+- Resolve colisões movendo entidades para fora da sobreposição
+- Processa apenas entidades com `solid: true`
+
+**PhysicsBody (`physics/PhysicsBody.ts`)**:
+- Interface para entidades físicas
+- Propriedades: `vx`, `vy` (velocidade), `solid` (se é sólido)
+
+**Métodos principais:**
+- `registerEntity(entity)`: Registra entidade para processamento de física
+- `unregisterEntity(entity)`: Remove entidade
+- `clearEntities()`: Limpa todas as entidades
+
+#### 8. **Sistema de Renderização**
+
+**RenderSystem (`systems/RenderSystem.ts`)**:
+- Centraliza a renderização de todas as entidades
+- Mantém ordem de renderização (primeiro registrado renderiza primeiro)
+- Gerencia cor de fundo do canvas
+
+**Métodos principais:**
+- `registerEntity(entity)`: Registra entidade para renderização
+- `unregisterEntity(entity)`: Remove entidade
+- `render()`: Limpa canvas e renderiza todas as entidades
+- `renderEntities()`: Renderiza apenas entidades (sem limpar)
+- `setBackgroundColor(color)`: Define cor de fundo
+- `setRenderer(renderer)`: Define o CanvasRenderer
+
+#### 9. **Canvas Renderer (`CanvasRenderer.ts`)**
 
 Abstração sobre Canvas API para renderização 2D:
 
@@ -313,12 +382,15 @@ Cena inicial do jogo que exibe o menu principal:
 - Transição para Level01Scene ao pressionar ENTER
 
 #### Level01Scene
-Cena de gameplay demonstrando movimento de player:
+Cena de gameplay demonstrando movimento de player e colisões:
 - Player representado por um retângulo vermelho
 - Movimento com WASD (w=up, a=left, s=down, d=right)
 - Normalização de vetor de movimento para velocidade consistente em diagonais
 - Movimento baseado em delta time (200 pixels/segundo)
 - Player inicializado no centro da tela
+- Parede cinza que bloqueia o movimento do player
+- Sistema de física detecta e resolve colisões automaticamente
+- Sistema de renderização centralizado gerencia a ordem de renderização
 
 ### Criando uma Nova Cena
 
@@ -328,38 +400,77 @@ Cena de gameplay demonstrando movimento de player:
 import { Scene } from "../engine/Scene";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { InputSystem } from "../systems/InputSystem";
+import { PhysicsSystem } from "../systems/PhysicsSystem";
+import { RenderSystem } from "../systems/RenderSystem";
+import { Player } from "../entities/Player";
+import { Wall } from "../entities/Wall";
 
 export class MyScene extends Scene {
+    private player: Player;
+    private wall: Wall;
+
     constructor(renderer: CanvasRenderer) {
         super();
         this.renderer = renderer;
+        this.player = new Player(renderer);
+        this.wall = new Wall(renderer, 200, 200, 100, 20);
     }
     
     onEnter(): void {
         console.log("Cena iniciada");
+        
+        // Registra entidades nos sistemas
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        
+        if (physicsSystem) {
+            physicsSystem.registerEntity(this.player);
+            physicsSystem.registerEntity(this.wall);
+        }
+        
+        if (renderSystem) {
+            renderSystem.registerEntity(this.wall); // Renderiza primeiro
+            renderSystem.registerEntity(this.player); // Renderiza por cima
+        }
     }
     
     update(delta: number): void {
         // Acessar input
         const inputSystem = this.game?.getSystems(InputSystem);
         const input = inputSystem?.getState();
-        const mouse = inputSystem?.getMouseState();
         
-        // Lógica da cena
-        if (input?.isPressed('Enter')) {
-            // Ação
+        if (input) {
+            this.player.input = input;
+            this.player.update(delta);
         }
+        
+        this.wall.update(delta);
     }
     
     render(): void {
-        if (!this.renderer) return;
-        this.renderer.clear('#000000');
-        // Renderização
-        this.renderer.fillRect(100, 100, 50, 50, '#ff0000');
+        // Usa o RenderSystem para renderizar
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        if (renderSystem) {
+            renderSystem.render();
+        }
     }
     
     onExit(): void {
         console.log("Cena finalizada");
+        
+        // Remove entidades dos sistemas
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        
+        if (physicsSystem) {
+            physicsSystem.unregisterEntity(this.player);
+            physicsSystem.unregisterEntity(this.wall);
+        }
+        
+        if (renderSystem) {
+            renderSystem.unregisterEntity(this.player);
+            renderSystem.unregisterEntity(this.wall);
+        }
     }
 }
 ```
@@ -398,9 +509,44 @@ export class MySystem implements System {
 this.game.addSystem(new MySystem());
 ```
 
+### Criando uma Nova Entidade
+
+1. Crie um arquivo em `src/renderer/entities/`:
+
+```typescript
+import { Entity } from "./Entity";
+import { CanvasRenderer } from "../rendering/CanvasRenderer";
+
+export class MyEntity extends Entity {
+    constructor(renderer: CanvasRenderer, x: number, y: number) {
+        super(x, y, 50, 50); // width, height
+    }
+    
+    update(delta: number): void {
+        // Lógica de atualização
+    }
+    
+    render(): void {
+        // Renderização usando CanvasRenderer
+    }
+}
+```
+
+2. Use a entidade em uma cena:
+
+```typescript
+const entity = new MyEntity(this.renderer, 100, 100);
+const physicsSystem = this.game?.getSystems(PhysicsSystem);
+const renderSystem = this.game?.getSystems(RenderSystem);
+
+physicsSystem?.registerEntity(entity);
+renderSystem?.registerEntity(entity);
+```
+
 ### Acessando Sistemas de uma Cena
 
 ```typescript
+// Input System
 const inputSystem = this.game?.getSystems(InputSystem);
 const inputState = inputSystem?.getState();
 const mouseState = inputSystem?.getMouseState();
@@ -415,6 +561,17 @@ if (mouseState?.wasClicked(0)) { // Botão esquerdo
     const pos = mouseState.getClickPosition(0);
     console.log(`Clicado em: ${pos?.x}, ${pos?.y}`);
 }
+
+// Physics System
+const physicsSystem = this.game?.getSystems(PhysicsSystem);
+physicsSystem?.registerEntity(myEntity);
+physicsSystem?.unregisterEntity(myEntity);
+
+// Render System
+const renderSystem = this.game?.getSystems(RenderSystem);
+renderSystem?.setBackgroundColor('#000000');
+renderSystem?.registerEntity(myEntity);
+renderSystem?.render(); // Renderiza todas as entidades
 ```
 
 ## 📚 Componentes Principais
@@ -504,6 +661,62 @@ if (mouseState?.wasClicked(0)) { // Botão esquerdo
 - `clearClick(button)`: Limpa estado de clique de um botão
 - `clearAllClicks()`: Limpa todos os estados de clique
 
+### PhysicsSystem (`systems/PhysicsSystem.ts`)
+
+**Responsabilidades:**
+- Detectar colisões entre entidades registradas
+- Resolver colisões movendo entidades para fora da sobreposição
+- Processar apenas entidades com `solid: true`
+
+**Métodos:**
+- `registerEntity(entity)`: Registra entidade para processamento de física
+- `unregisterEntity(entity)`: Remove entidade do sistema
+- `clearEntities()`: Limpa todas as entidades registradas
+
+**Como funciona:**
+- Usa detecção AABB (Axis-Aligned Bounding Box)
+- Calcula sobreposição em X e Y
+- Move entidade na direção de menor sobreposição
+- Zera velocidade (`vx`/`vy`) quando aplicável
+
+### RenderSystem (`systems/RenderSystem.ts`)
+
+**Responsabilidades:**
+- Centralizar renderização de entidades
+- Gerenciar ordem de renderização
+- Controlar cor de fundo do canvas
+
+**Métodos:**
+- `registerEntity(entity)`: Registra entidade para renderização
+- `unregisterEntity(entity)`: Remove entidade
+- `render()`: Limpa canvas e renderiza todas as entidades
+- `renderEntities()`: Renderiza apenas entidades (sem limpar canvas)
+- `clear()`: Limpa apenas o canvas
+- `setBackgroundColor(color)`: Define cor de fundo
+- `setRenderer(renderer)`: Define o CanvasRenderer usado
+
+### Entity (`entities/Entity.ts`)
+
+**Responsabilidades:**
+- Classe base abstrata para todas as entidades
+- Define estrutura básica (posição e tamanho)
+- Força implementação de `update()` e `render()`
+
+**Propriedades:**
+- `x`, `y`: Posição da entidade
+- `width`, `height`: Dimensões da entidade
+
+**Métodos abstratos:**
+- `update(delta)`: Atualização lógica a cada frame
+- `render()`: Renderização visual
+
+### PhysicsBody (`physics/PhysicsBody.ts`)
+
+**Interface para entidades físicas:**
+- `vx`: Velocidade horizontal
+- `vy`: Velocidade vertical
+- `solid`: Se a entidade é sólida (pode colidir)
+
 ## 🎮 Estado Atual do Projeto
 
 ### ✅ Implementado
@@ -512,20 +725,25 @@ if (mouseState?.wasClicked(0)) { // Botão esquerdo
 - ✅ Game loop com delta time
 - ✅ Sistema de input (teclado e mouse)
 - ✅ Sistema de mouse com detecção de cliques e posição
+- ✅ Sistema de física com detecção e resolução de colisões (AABB)
+- ✅ Sistema de renderização centralizado
+- ✅ Sistema de entidades (Entity, Player, Wall)
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Cena de menu principal (MainMenuScene)
-- ✅ Cena de gameplay (Level01Scene) com movimento de player
+- ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões
 - ✅ Movimento de player com WASD e normalização de vetor
+- ✅ Colisões entre player e paredes
 - ✅ Hot reload em desenvolvimento
 - ✅ Build separado para main e renderer processes
 
 ### 🚧 Em Desenvolvimento / Planejado
 
-- ⏳ Sistema de física
 - ⏳ Sistema de áudio
 - ⏳ Sistema de assets/sprites
 - ⏳ Mais cenas de jogo
-- ⏳ Sistema de entidades/componentes (ECS)
+- ⏳ Sistema de componentes mais robusto
+- ⏳ Sistema de partículas
+- ⏳ Sistema de animação
 
 ## 📝 Notas Técnicas
 
