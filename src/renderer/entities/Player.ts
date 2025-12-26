@@ -1,6 +1,5 @@
 import { Entity } from "./Entity";
 import { InputState } from "../input/InputState";
-import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { PhysicsBody } from "../physics/PhysicsBody";
 import { ActionInput } from "../input/ActionInput";
 import { InputAction } from "../input/InputAction";
@@ -12,11 +11,9 @@ export class Player extends Entity implements PhysicsBody {
     speed: number = 200; // pixels por segundo
     // input?: InputState;
     actions?: ActionInput;
-    private renderer: CanvasRenderer;
 
-    constructor(renderer: CanvasRenderer, x: number = 0, y: number = 0) {
+    constructor(x: number = 0, y: number = 0) {
         super(x, y, 50, 50);
-        this.renderer = renderer;
     }
 
     /**
@@ -56,7 +53,10 @@ export class Player extends Entity implements PhysicsBody {
       }
 
     render(): void {
+        const renderer = this.getRenderer();
+        if (!renderer) return;
+        
         // Desenha o player na posição atual usando width e height da Entity
-        this.renderer.fillRect(this.x, this.y, this.width, this.height, '#ff0000');
+        renderer.fillRect(this.x, this.y, this.width, this.height, '#ff0000');
     }
 }

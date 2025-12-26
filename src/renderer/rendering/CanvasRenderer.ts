@@ -26,12 +26,46 @@ export class CanvasRenderer {
         // Implement in subclass
     }
     
-    drawText(text: string, x: number, y: number, options: {font?: string, color?: string}): void {
+    drawText(text: string, x: number, y: number, options: {font?: string, color?: string, verticalAlign?: 'top' | 'middle' | 'bottom', horizontalAlign?: 'left' | 'center' | 'right'}): void {
+      // Salva o estado atual do contexto
+      this.ctx.save();
+
       if(options.font) this.ctx.font = options.font;
       if(options.color) this.ctx.fillStyle = options.color;
 
+      // Configura alinhamento horizontal
+      if(options.horizontalAlign) {
+        this.ctx.textAlign = options.horizontalAlign;
+      } else {
+        this.ctx.textAlign = 'left';
+      }
+
+      // Configura alinhamento vertical usando textBaseline
+      if(options.verticalAlign) {
+        switch(options.verticalAlign) {
+          case 'top':
+            // Usa 'top' para que Y seja o topo do texto
+            this.ctx.textBaseline = 'top';
+            break;
+          case 'middle':
+            // Usa 'middle' para que Y seja o centro do texto
+            this.ctx.textBaseline = 'middle';
+            break;
+          case 'bottom':
+            // Usa 'alphabetic' (padrão) para que Y seja a linha de base
+            this.ctx.textBaseline = 'alphabetic';
+            break;
+        }
+      } else {
+        this.ctx.textBaseline = 'alphabetic';
+      }
+
       this.ctx.fillText(text, x, y);
+      
+      // Restaura o estado anterior
+      this.ctx.restore();
     }
+
 
     measureText(text: string, font?: string): TextMetrics {
       if (font) {

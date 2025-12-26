@@ -1,14 +1,11 @@
 import { Entity } from "./Entity";
-import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { PhysicsBody } from "../physics/PhysicsBody";
 
 export class Wall extends Entity implements Partial<PhysicsBody> {
     solid: boolean = true;
-    private renderer: CanvasRenderer;
 
-    constructor(renderer: CanvasRenderer, x: number, y: number, width: number, height: number) {
+    constructor(x: number, y: number, width: number, height: number) {
         super(x, y, width, height);
-        this.renderer = renderer;
     }
 
     update(delta: number): void {
@@ -16,7 +13,10 @@ export class Wall extends Entity implements Partial<PhysicsBody> {
     }
 
     render(): void {
+        const renderer = this.getRenderer();
+        if (!renderer) return;
+        
         // Desenha a parede na posição atual usando width e height da Entity
-        this.renderer.fillRect(this.x, this.y, this.width, this.height, '#888888');
+        renderer.fillRect(this.x, this.y, this.width, this.height, '#888888');
     }
 }

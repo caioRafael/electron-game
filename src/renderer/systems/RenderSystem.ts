@@ -1,14 +1,24 @@
 import { System } from "../engine/System";
 import { Entity } from "../entities/Entity";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
+import { UIElement } from "../ui/UIElement";
 
 export class RenderSystem implements System {
-    private entities: Entity[] = [];
+    // private entities: Entity[] = [];
+    private world: Entity[] = [];
+    private ui: UIElement[] = []
     private backgroundColor: string = '#1e1e1e';
     private renderer?: CanvasRenderer;
 
     constructor(renderer?: CanvasRenderer) {
         this.renderer = renderer;
+    }
+
+    /**
+     * Obtém o CanvasRenderer usado para renderização
+     */
+    getRenderer(): CanvasRenderer | undefined {
+        return this.renderer;
     }
 
     onInit(): void {
@@ -22,7 +32,8 @@ export class RenderSystem implements System {
 
     onDestroy(): void {
         // Limpa o registro de entidades
-        this.entities = [];
+        this.world = [];
+        this.ui = [];
     }
 
     /**
@@ -42,27 +53,44 @@ export class RenderSystem implements System {
     /**
      * Registra uma entidade para renderização
      */
-    registerEntity(entity: Entity): void {
-        if (!this.entities.includes(entity)) {
-            this.entities.push(entity);
+    registerWorld(entity: Entity): void {
+        if (!this.world.includes(entity)) {
+            // Injeta o RenderSystem na entidade para acesso ao renderer
+            entity.setRenderSystem(this);
+            this.world.push(entity);
         }
     }
 
     /**
      * Remove uma entidade do sistema de renderização
      */
-    unregisterEntity(entity: Entity): void {
-        const index = this.entities.indexOf(entity);
+    unregisterWorld(entity: Entity): void {
+        const index = this.world.indexOf(entity);
         if (index > -1) {
-            this.entities.splice(index, 1);
+            this.world.splice(index, 1);
         }
+    }
+
+    registerUI(element: UIElement): void {
+        if (this.ui.includes(element)) return;
+        // Injeta o RenderSystem no elemento de UI para acesso ao renderer
+        element.setRenderSystem(this);
+        this.ui.push(element);
+    }
+
+    unregisterUI(element: UIElement): void {
+        this.ui = this.ui.filter(e => e !== element)
     }
 
     /**
      * Limpa todas as entidades registradas
      */
-    clearEntities(): void {
-        this.entities = [];
+    clearWorld(): void {
+        this.world = [];
+    }
+
+    clearUI(): void {
+        this.ui = [];
     }
 
     /**
@@ -79,8 +107,12 @@ export class RenderSystem implements System {
         this.renderer.clear(this.backgroundColor);
 
         // Renderiza todas as entidades na ordem de registro
-        for (const entity of this.entities) {
+        for (const entity of this.world) {
             entity.render();
+        }
+
+        for (const element of this.ui) {
+            element.render();
         }
     }
 
@@ -95,7 +127,7 @@ export class RenderSystem implements System {
         }
 
         // Renderiza todas as entidades na ordem de registro
-        for (const entity of this.entities) {
+        for (const entity of this.world) {
             entity.render();
         }
     }

@@ -13,6 +13,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const renderer = new CanvasRenderer(game);
     const app = new App(renderer);
 
-    app.start(new MainMenuScene(renderer));
+    app.start(new MainMenuScene());
     
 });

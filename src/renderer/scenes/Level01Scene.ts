@@ -1,23 +1,26 @@
 import { Scene } from "../engine/Scene";
-import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { InputSystem } from "../systems/InputSystem";
 import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { RenderSystem } from "../systems/RenderSystem";
 import { Player } from "../entities/Player";
 import { Wall } from "../entities/Wall";
-import { ActionInput } from "../input/ActionInput";
+import { DebugFPS } from "../ui/DebugFPS";
+import { PlayerStatus } from "../ui/PlayerStatus";
 
 
 export class Level01Scene extends Scene {
     private player: Player;
     private wall: Wall;
+    private debugFPS: DebugFPS;
+    private playerStatus: PlayerStatus;
 
-    constructor(renderer: CanvasRenderer){
+    constructor(){
         super();
-        this.renderer = renderer;
-        this.player = new Player(renderer);
+        this.player = new Player();
         // Cria uma parede no mapa (exemplo: parede horizontal no topo)
-        this.wall = new Wall(renderer, 500, 300, 200, 20);
+        this.wall = new Wall(500, 300, 200, 20);
+        this.debugFPS = new DebugFPS();
+        this.playerStatus = new PlayerStatus(this.player);
     }
 
     /**
@@ -26,8 +29,9 @@ export class Level01Scene extends Scene {
     onEnter(): void {
         console.log('Level01Scene: onEnter');
         // Inicializa o player no centro da tela
-        if (this.renderer) {
-            const canvas = this.renderer.getCanvas();
+        const renderer = this.getRenderer();
+        if (renderer) {
+            const canvas = renderer.getCanvas();
             this.player.x = canvas.width / 2 - this.player.width / 2;
             this.player.y = canvas.height / 2 - this.player.height / 2;
         }
@@ -43,8 +47,10 @@ export class Level01Scene extends Scene {
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
             // Registra na ordem: primeiro as que ficam atrás (parede), depois as da frente (player)
-            renderSystem.registerEntity(this.wall);
-            renderSystem.registerEntity(this.player);
+            renderSystem.registerWorld(this.wall);
+            renderSystem.registerWorld(this.player);
+            renderSystem.registerUI(this.debugFPS);
+            renderSystem.registerUI(this.playerStatus);
         }
     }
 
@@ -64,8 +70,10 @@ export class Level01Scene extends Scene {
         // Remove as entidades do sistema de renderização
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
-            renderSystem.unregisterEntity(this.player);
-            renderSystem.unregisterEntity(this.wall);
+            renderSystem.unregisterWorld(this.player);
+            renderSystem.unregisterWorld(this.wall);
+            renderSystem.unregisterUI(this.debugFPS);
+            renderSystem.unregisterUI(this.playerStatus);
         }
     }
 
@@ -85,6 +93,9 @@ export class Level01Scene extends Scene {
         
         // Atualiza a parede (mesmo que não faça nada por enquanto)
         this.wall.update(delta);
+        
+        // Atualiza elementos de UI
+        this.debugFPS.update(delta);
     }
 
     /**
@@ -97,10 +108,13 @@ export class Level01Scene extends Scene {
             renderSystem.render();
         } else {
             // Fallback: renderização manual se o RenderSystem não estiver disponível
-            if (!this.renderer) return;
-            this.renderer.clear('#1e1e1e');
+            const renderer = this.getRenderer();
+            if (!renderer) return;
+            renderer.clear('#1e1e1e');
             this.wall.render();
             this.player.render();
+            this.debugFPS.render();
+            this.playerStatus.render();
         }
     }
 }
