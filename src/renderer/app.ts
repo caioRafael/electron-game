@@ -11,6 +11,7 @@ import { CameraSystem } from "./systems/CameraSystem";
 export class App {
     private game: Game;
     private renderer: CanvasRenderer;
+    private cameraSystem?: CameraSystem;
     
     constructor(renderer: CanvasRenderer){
         this.renderer = renderer;
@@ -24,7 +25,8 @@ export class App {
         )
         
         this.game.addSystem(new InputSystem());
-        this.game.addSystem(new CameraSystem(camera));
+        this.cameraSystem = new CameraSystem(camera);
+        this.game.addSystem(this.cameraSystem);
         this.game.addSystem(new PhysicsSystem());
         
         // Cria e configura o RenderSystem com o renderer
@@ -38,6 +40,10 @@ export class App {
         const resizeCanvas = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            // Atualiza o tamanho da câmera para manter o player centralizado
+            if (this.cameraSystem) {
+                this.cameraSystem.updateSize(canvas.width, canvas.height);
+            }
         };
         
         resizeCanvas();

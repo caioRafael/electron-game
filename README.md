@@ -67,7 +67,8 @@ game/
 │       │   └── Wall.ts          # Entidade de parede
 │       │
 │       ├── physics/              # Sistema de física
-│       │   └── PhysicsBody.ts   # Interface para corpos físicos
+│       │   ├── PhysicsBody.ts   # Interface para corpos físicos
+│       │   └── ColliderType.ts   # Tipos de collider (SOLID, TRIGGER)
 │       │
 │       ├── input/                # Gerenciamento de input
 │       │   ├── InputState.ts    # Estado das teclas pressionadas
@@ -262,26 +263,45 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 
 **Player (`entities/Player.ts`)**:
 - Entidade controlável pelo jogador
-- Implementa `PhysicsBody` (vx, vy, solid)
+- Implementa `PhysicsBody` completo (vx, vy, colliderType: SOLID)
 - Movimento com WASD
 - Normalização de vetor para movimento diagonal consistente
 
 **Wall (`entities/Wall.ts`)**:
 - Entidade estática (parede)
-- Implementa `Partial<PhysicsBody>` (apenas `solid`)
+- Implementa `Partial<PhysicsBody>` (colliderType: SOLID)
 - Não se move, apenas bloqueia outras entidades
+
+**Door (`entities/Door.ts`)**:
+- Entidade de porta/área de detecção
+- Implementa `Partial<PhysicsBody>` (colliderType: TRIGGER)
+- Não bloqueia movimento, apenas detecta quando entidades passam por ela
 
 #### 7. **Sistema de Física**
 
 **PhysicsSystem (`systems/PhysicsSystem.ts`)**:
 - Gerencia detecção e resolução de colisões
 - Usa AABB (Axis-Aligned Bounding Box) para detecção
-- Resolve colisões movendo entidades para fora da sobreposição
-- Processa apenas entidades com `solid: true`
+- Suporta dois tipos de colliders: **SOLID** e **TRIGGER**
+- **SOLID**: Bloqueia movimento e resolve colisão fisicamente
+- **TRIGGER**: Detecta sobreposição sem bloquear movimento
+
+**ColliderType (`physics/ColliderType.ts`)**:
+- Enum que define os tipos de collider disponíveis:
+  - `SOLID`: Bloqueia movimento, resolve colisão e chama `onCollision`
+  - `TRIGGER`: Detecta sobreposição sem bloquear, chama `onTrigger`
 
 **PhysicsBody (`physics/PhysicsBody.ts`)**:
 - Interface para entidades físicas
-- Propriedades: `vx`, `vy` (velocidade), `solid` (se é sólido)
+- Propriedades:
+  - `vx`, `vy`: Velocidade horizontal e vertical (opcional)
+  - `colliderType`: Tipo de collider (`ColliderType.SOLID` ou `ColliderType.TRIGGER`)
+  - `onCollision?(other)`: Callback chamado quando há colisão entre dois SOLID
+  - `onTrigger?(other)`: Callback chamado quando um TRIGGER detecta sobreposição
+
+**Comportamento:**
+- **Colisão SOLID vs SOLID**: Resolve colisão (move entidade para fora) e chama `onCollision` em ambas
+- **Colisão TRIGGER vs qualquer**: Não resolve colisão, apenas chama `onTrigger` no TRIGGER
 
 **Métodos principais:**
 - `registerEntity(entity)`: Registra entidade para processamento de física
@@ -436,9 +456,11 @@ Cena de gameplay demonstrando movimento de player e colisões:
 - Normalização de vetor de movimento para velocidade consistente em diagonais
 - Movimento baseado em delta time (200 pixels/segundo)
 - Player inicializado no centro da tela
-- Parede cinza que bloqueia o movimento do player
+- Caixa formada por paredes cinzas (SOLID) que bloqueiam o movimento do player
+- Porta marrom (TRIGGER) que detecta quando o player passa por ela sem bloquear movimento
 - Sistema de física detecta e resolve colisões automaticamente
 - Sistema de renderização centralizado gerencia a ordem de renderização
+- Câmera segue o player mantendo-o sempre centralizado na tela
 
 ### Criando uma Nova Cena
 
@@ -578,12 +600,16 @@ this.game.addSystem(new MySystem());
 
 ### Criando uma Nova Entidade
 
-1. Crie um arquivo em `src/renderer/entities/`:
+#### Entidade com Collider SOLID (bloqueia movimento)
 
 ```typescript
 import { Entity } from "./Entity";
+import { PhysicsBody } from "../physics/PhysicsBody";
+import { ColliderType } from "../physics/ColliderType";
 
-export class MyEntity extends Entity {
+export class MySolidEntity extends Entity implements Partial<PhysicsBody> {
+    colliderType: ColliderType = ColliderType.SOLID;
+    
     constructor(x: number, y: number) {
         super(x, y, 50, 50); // width, height
     }
@@ -593,25 +619,97 @@ export class MyEntity extends Entity {
     }
     
     render(): void {
-        // Acessa o renderer através do método getRenderer()
         const renderer = this.getRenderer();
         if (!renderer) return;
-        
-        // Renderização usando CanvasRenderer
         renderer.fillRect(this.x, this.y, this.width, this.height, '#ff0000');
+    }
+    
+    onCollision?(other: Partial<PhysicsBody>): void {
+        console.log('Colidiu com:', other);
     }
 }
 ```
 
-2. Use a entidade em uma cena:
+#### Entidade com Collider TRIGGER (detecta sem bloquear)
 
 ```typescript
-const entity = new MyEntity(100, 100);
+import { Entity } from "./Entity";
+import { PhysicsBody } from "../physics/PhysicsBody";
+import { ColliderType } from "../physics/ColliderType";
+
+export class MyTriggerEntity extends Entity implements Partial<PhysicsBody> {
+    colliderType: ColliderType = ColliderType.TRIGGER;
+    
+    constructor(x: number, y: number) {
+        super(x, y, 100, 100);
+    }
+    
+    update(delta: number): void {
+        // Lógica de atualização
+    }
+    
+    render(): void {
+        const renderer = this.getRenderer();
+        if (!renderer) return;
+        renderer.fillRect(this.x, this.y, this.width, this.height, '#00ff00');
+    }
+    
+    onTrigger?(other: Partial<PhysicsBody>): void {
+        console.log('Entidade passou pelo trigger:', other);
+        // Exemplo: mudar de cena, dar item, etc.
+    }
+}
+```
+
+#### Entidade móvel com física completa
+
+```typescript
+import { Entity } from "./Entity";
+import { PhysicsBody } from "../physics/PhysicsBody";
+import { ColliderType } from "../physics/ColliderType";
+
+export class MyMovingEntity extends Entity implements PhysicsBody {
+    vx: number = 0;
+    vy: number = 0;
+    colliderType: ColliderType = ColliderType.SOLID;
+    
+    constructor(x: number, y: number) {
+        super(x, y, 50, 50);
+    }
+    
+    update(delta: number): void {
+        // Atualiza posição usando velocidade
+        this.x += this.vx * delta;
+        this.y += this.vy * delta;
+    }
+    
+    render(): void {
+        const renderer = this.getRenderer();
+        if (!renderer) return;
+        renderer.fillRect(this.x, this.y, this.width, this.height, '#0000ff');
+    }
+}
+```
+
+#### Usando entidades em uma cena:
+
+```typescript
+const solidEntity = new MySolidEntity(100, 100);
+const triggerEntity = new MyTriggerEntity(200, 200);
+const movingEntity = new MyMovingEntity(300, 300);
+
 const physicsSystem = this.game?.getSystems(PhysicsSystem);
 const renderSystem = this.game?.getSystems(RenderSystem);
 
-physicsSystem?.registerEntity(entity);
-renderSystem?.registerWorld(entity); // Injeta RenderSystem automaticamente
+// Registra todas no sistema de física
+physicsSystem?.registerEntity(solidEntity);
+physicsSystem?.registerEntity(triggerEntity);
+physicsSystem?.registerEntity(movingEntity);
+
+// Registra no sistema de renderização
+renderSystem?.registerWorld(solidEntity);
+renderSystem?.registerWorld(triggerEntity);
+renderSystem?.registerWorld(movingEntity);
 ```
 
 ### Criando um Novo Elemento de UI
@@ -788,9 +886,9 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 ### PhysicsSystem (`systems/PhysicsSystem.ts`)
 
 **Responsabilidades:**
-- Detectar colisões entre entidades registradas
-- Resolver colisões movendo entidades para fora da sobreposição
-- Processar apenas entidades com `solid: true`
+- Detectar colisões entre entidades registradas usando AABB
+- Resolver colisões entre entidades SOLID (bloqueia movimento)
+- Detectar sobreposição com entidades TRIGGER (não bloqueia)
 
 **Métodos:**
 - `registerEntity(entity)`: Registra entidade para processamento de física
@@ -799,9 +897,8 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 
 **Como funciona:**
 - Usa detecção AABB (Axis-Aligned Bounding Box)
-- Calcula sobreposição em X e Y
-- Move entidade na direção de menor sobreposição
-- Zera velocidade (`vx`/`vy`) quando aplicável
+- **Colisão SOLID vs SOLID**: Resolve colisão movendo entidade para fora, calcula sobreposição em X e Y, move na direção de menor sobreposição, zera velocidade (`vx`/`vy`) quando aplicável, chama `onCollision` em ambas entidades
+- **Colisão TRIGGER vs qualquer**: Não resolve colisão, apenas chama `onTrigger` no TRIGGER quando detecta sobreposição
 
 ### CameraSystem (`systems/CameraSystem.ts`)
 
@@ -875,9 +972,19 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 ### PhysicsBody (`physics/PhysicsBody.ts`)
 
 **Interface para entidades físicas:**
-- `vx`: Velocidade horizontal
-- `vy`: Velocidade vertical
-- `solid`: Se a entidade é sólida (pode colidir)
+- `vx`: Velocidade horizontal (opcional, apenas para entidades móveis)
+- `vy`: Velocidade vertical (opcional, apenas para entidades móveis)
+- `colliderType`: Tipo de collider (`ColliderType.SOLID` ou `ColliderType.TRIGGER`)
+- `onCollision?(other)`: Callback opcional chamado quando há colisão entre dois SOLID
+- `onTrigger?(other)`: Callback opcional chamado quando um TRIGGER detecta sobreposição
+
+**Nota:** Entidades estáticas podem implementar `Partial<PhysicsBody>` e definir apenas `colliderType`. Entidades móveis devem implementar `PhysicsBody` completo incluindo `vx` e `vy`.
+
+### ColliderType (`physics/ColliderType.ts`)
+
+**Enum que define tipos de collider:**
+- `ColliderType.SOLID`: Bloqueia movimento e resolve colisão fisicamente
+- `ColliderType.TRIGGER`: Detecta sobreposição sem bloquear movimento
 
 ## 🎮 Estado Atual do Projeto
 
@@ -891,7 +998,8 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - ✅ Sistema de renderização centralizado
 - ✅ Sistema de câmera que segue entidades
 - ✅ Transformação de câmera aplicada ao mundo (UI fixa na tela)
-- ✅ Sistema de entidades (Entity, Player, Wall)
+- ✅ Sistema de entidades (Entity, Player, Wall, Door)
+- ✅ Sistema de colliders: SOLID (bloqueia movimento) e TRIGGER (detecta sem bloquear)
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Cena de menu principal (MainMenuScene)
 - ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões

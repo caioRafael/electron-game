@@ -1,5 +1,6 @@
 import { System } from "../engine/System";
 import { Entity } from "../entities/Entity";
+import { ColliderType } from "../physics/ColliderType";
 import { PhysicsBody } from "../physics/PhysicsBody";
 
 export class PhysicsSystem implements System {
@@ -52,18 +53,27 @@ export class PhysicsSystem implements System {
         for (let i = 0; i < this.entities.length; i++) {
             const entityA = this.entities[i];
             
-            // Só processa entidades que são sólidas
-            if (!entityA.solid) continue;
-
             for (let j = i + 1; j < this.entities.length; j++) {
                 const entityB = this.entities[j];
                 
-                // Só processa entidades que são sólidas
-                if (!entityB.solid) continue;
+                if(!this.isColliding(entityA, entityB)) continue;
+                
+                const aIsSolid = entityA.colliderType === ColliderType.SOLID;
+                const bIsSolid = entityB.colliderType === ColliderType.SOLID;
 
-                // Verifica se há colisão
-                if (this.isColliding(entityA, entityB)) {
+                //BLOQUEIA
+                if(aIsSolid && bIsSolid) {
                     this.resolveCollision(entityA, entityB);
+                    entityA.onCollision?.(entityB);
+                    entityB.onCollision?.(entityA);
+                }
+
+                // TRIGGER
+                if(entityA.colliderType === ColliderType.TRIGGER) {
+                    entityA.onTrigger?.(entityB);
+                }
+                if(entityB.colliderType === ColliderType.TRIGGER) {
+                    entityB.onTrigger?.(entityA);
                 }
             }
         }

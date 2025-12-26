@@ -2,11 +2,12 @@ import { Entity } from "./Entity";
 import { PhysicsBody } from "../physics/PhysicsBody";
 import { ActionInput } from "../input/ActionInput";
 import { InputAction } from "../input/InputAction";
+import { ColliderType } from "../physics/ColliderType";
 
 export class Player extends Entity implements PhysicsBody {
     vx: number = 0;
     vy: number = 0;
-    solid: boolean = true;
+    colliderType: ColliderType = ColliderType.SOLID;
     speed: number = 200; // pixels por segundo
     // input?: InputState;
     actions?: ActionInput;
@@ -57,5 +58,13 @@ export class Player extends Entity implements PhysicsBody {
         
         // Desenha o player na posição atual usando width e height da Entity
         renderer.fillRect(this.x, this.y, this.width, this.height, '#ff0000');
+    }
+
+    onCollision?(other: Partial<PhysicsBody>): void {
+        console.log('Player colidiu com outra entidade');
+    }
+
+    onTrigger?(other: Partial<PhysicsBody>): void {
+        console.log('Player colidiu com outra entidade');
     }
 }

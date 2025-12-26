@@ -4,6 +4,7 @@ import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { RenderSystem } from "../systems/RenderSystem";
 import { Player } from "../entities/Player";
 import { Wall } from "../entities/Wall";
+import { Door } from "../entities/Door";
 import { DebugFPS } from "../ui/DebugFPS";
 import { PlayerStatus } from "../ui/PlayerStatus";
 import { CameraSystem } from "../systems/CameraSystem";
@@ -15,6 +16,7 @@ export class Level01Scene extends Scene {
     private wallBottom: Wall;
     private wallLeft: Wall;
     private wallRight: Wall;
+    private door: Door;
     private debugFPS: DebugFPS;
     private playerStatus: PlayerStatus;
 
@@ -43,6 +45,13 @@ export class Level01Scene extends Scene {
         // Parede direita
         this.wallRight = new Wall(boxLeft + boxWidth - wallThickness, boxTop + wallThickness, wallThickness, boxHeight - 2 * wallThickness);
 
+        // Porta na parede direita (centro vertical)
+        const doorWidth = 80;
+        const doorHeight = 100;
+        const doorX = boxLeft + boxWidth - wallThickness;
+        const doorY = boxTop + (boxHeight - doorHeight) / 2;
+        this.door = new Door(doorX, doorY, wallThickness, doorHeight);
+
         this.debugFPS = new DebugFPS();
         this.playerStatus = new PlayerStatus(this.player);
     }
@@ -64,16 +73,18 @@ export class Level01Scene extends Scene {
             physicsSystem.registerEntity(this.wallBottom);
             physicsSystem.registerEntity(this.wallLeft);
             physicsSystem.registerEntity(this.wallRight);
+            physicsSystem.registerEntity(this.door);
         }
 
         // Registra as entidades no sistema de renderização
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
-            // Registra na ordem: primeiro as que ficam atrás (paredes), depois as da frente (player)
+            // Registra na ordem: primeiro as que ficam atrás (paredes), depois porta e player
             renderSystem.registerWorld(this.wallTop);
             renderSystem.registerWorld(this.wallBottom);
             renderSystem.registerWorld(this.wallLeft);
             renderSystem.registerWorld(this.wallRight);
+            renderSystem.registerWorld(this.door);
             renderSystem.registerWorld(this.player);
             renderSystem.registerUI(this.debugFPS);
             renderSystem.registerUI(this.playerStatus);
@@ -94,6 +105,7 @@ export class Level01Scene extends Scene {
             physicsSystem.unregisterEntity(this.wallBottom);
             physicsSystem.unregisterEntity(this.wallLeft);
             physicsSystem.unregisterEntity(this.wallRight);
+            physicsSystem.unregisterEntity(this.door);
         }
 
         // Remove as entidades do sistema de renderização
@@ -104,6 +116,7 @@ export class Level01Scene extends Scene {
             renderSystem.unregisterWorld(this.wallBottom);
             renderSystem.unregisterWorld(this.wallLeft);
             renderSystem.unregisterWorld(this.wallRight);
+            renderSystem.unregisterWorld(this.door);
             renderSystem.unregisterUI(this.debugFPS);
             renderSystem.unregisterUI(this.playerStatus);
         }
@@ -128,6 +141,7 @@ export class Level01Scene extends Scene {
         this.wallBottom.update(delta);
         this.wallLeft.update(delta);
         this.wallRight.update(delta);
+        this.door.update(delta);
 
         // Atualiza elementos de UI
         this.debugFPS.update(delta);

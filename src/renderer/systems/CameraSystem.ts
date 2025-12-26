@@ -17,8 +17,8 @@ export class CameraSystem implements System {
         // Atualização da câmera
         if(!this.target) return;
 
+        // Centraliza o target na tela
         this.camera.x = this.target.x + this.target.width / 2 - this.camera.width / 2;
-
         this.camera.y = this.target.y + this.target.height / 2 - this.camera.height / 2;
     }
 
@@ -32,5 +32,13 @@ export class CameraSystem implements System {
 
     follow(target: {x: number; y: number; width: number; height: number; }): void {
         this.target = target;
+    }
+
+    /**
+     * Atualiza o tamanho da câmera (chamado quando o canvas é redimensionado)
+     */
+    updateSize(width: number, height: number): void {
+        this.camera.width = width;
+        this.camera.height = height;
     }
 }

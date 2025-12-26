@@ -1,9 +1,9 @@
-import { Entity } from "./Entity";
 import { PhysicsBody } from "../physics/PhysicsBody";
+import { Entity } from "./Entity";
 import { ColliderType } from "../physics/ColliderType";
 
-export class Wall extends Entity implements Partial<PhysicsBody> {
-    colliderType: ColliderType = ColliderType.SOLID;
+export class Door extends Entity implements Partial<PhysicsBody> {
+    colliderType: ColliderType = ColliderType.TRIGGER;
 
     constructor(x: number, y: number, width: number, height: number) {
         super(x, y, width, height);
@@ -18,14 +18,10 @@ export class Wall extends Entity implements Partial<PhysicsBody> {
         if (!renderer) return;
         
         // Desenha a parede na posição atual usando width e height da Entity
-        renderer.fillRect(this.x, this.y, this.width, this.height, '#888888');
-    }
-
-    onCollision?(other: Partial<PhysicsBody>): void {
-        console.log('Parede colidiu com outra entidade: ', other);
+        renderer.fillRect(this.x, this.y, this.width, this.height, '#8B4513'); // Porta marrom
     }
 
     onTrigger?(other: Partial<PhysicsBody>): void {
-        console.log('Parede colidiu com outra entidade: ', other);
+        console.log('Player colidiu com a porta');
     }
 }
