@@ -2,7 +2,7 @@ import { System } from "../engine/System";
 import { Entity } from "../entities/Entity";
 import { ColliderType } from "../physics/ColliderType";
 import { PhysicsBody } from "../physics/PhysicsBody";
-import { Game } from "../engine/Game";
+import { Game, GameStatus } from "../engine/Game";
 import { TileMap } from "../map/TileMap";
 import { TileCollisionType } from "../map/TileTypes";
 
@@ -17,6 +17,12 @@ export class PhysicsSystem implements System {
     }
 
     onUpdate(delta: number): void {
+        // Pausa física quando o jogo está pausado ou não está em gameplay
+        const status = this.game?.getStatus();
+        if (status !== GameStatus.PLAYING) {
+            return;
+        }
+
         // Processa colisões entre entidades e com o tile map
         this.checkCollisions();
         if (this.tileMap) {
@@ -195,8 +201,24 @@ export class PhysicsSystem implements System {
 
     /**
      * Verifica e resolve colisão entre uma entidade e tiles sólidos
+     * Resolve colisões em X e Y separadamente para evitar atravessar paredes em diagonal
      */
     private checkEntityTileCollision(entity: Entity & Partial<PhysicsBody>): void {
+        if (!this.tileMap) return;
+
+        const tileSize = this.tileMap.tileSize;
+        
+        // Resolve colisão em X primeiro
+        this.resolveTileCollisionAxis(entity, true);
+        
+        // Depois resolve colisão em Y
+        this.resolveTileCollisionAxis(entity, false);
+    }
+
+    /**
+     * Resolve colisão em um eixo específico (X ou Y)
+     */
+    private resolveTileCollisionAxis(entity: Entity & Partial<PhysicsBody>, isXAxis: boolean): void {
         if (!this.tileMap) return;
 
         const tileSize = this.tileMap.tileSize;
@@ -207,12 +229,8 @@ export class PhysicsSystem implements System {
         const endTileX = this.tileMap.worldToTile(entity.x + entity.width);
         const endTileY = this.tileMap.worldToTile(entity.y + entity.height);
 
-        let collisionX = false;
-        let collisionY = false;
-        let minOverlapX = Infinity;
-        let minOverlapY = Infinity;
-        let pushX = 0;
-        let pushY = 0;
+        let minOverlap = Infinity;
+        let push = 0;
 
         // Verifica todos os tiles que a entidade está sobrepondo
         for (let tileY = startTileY; tileY <= endTileY; tileY++) {
@@ -233,23 +251,22 @@ export class PhysicsSystem implements System {
 
                     // Só processa se há sobreposição real
                     if (overlapX > 0 && overlapY > 0) {
-                        // Determina direção da colisão baseada na menor sobreposição
-                        if (overlapX < overlapY) {
-                            collisionX = true;
-                            if (overlapX < minOverlapX) {
-                                minOverlapX = overlapX;
+                        if (isXAxis) {
+                            // Resolve colisão em X
+                            if (overlapX < minOverlap) {
+                                minOverlap = overlapX;
                                 // Move para fora do tile na direção X
-                                pushX = entity.x < tileWorldX 
-                                    ? -(overlapX) // Move para esquerda
+                                push = entity.x < tileWorldX 
+                                    ? -overlapX // Move para esquerda
                                     : overlapX;   // Move para direita
                             }
                         } else {
-                            collisionY = true;
-                            if (overlapY < minOverlapY) {
-                                minOverlapY = overlapY;
+                            // Resolve colisão em Y
+                            if (overlapY < minOverlap) {
+                                minOverlap = overlapY;
                                 // Move para fora do tile na direção Y
-                                pushY = entity.y < tileWorldY 
-                                    ? -(overlapY) // Move para cima
+                                push = entity.y < tileWorldY 
+                                    ? -overlapY // Move para cima
                                     : overlapY;   // Move para baixo
                             }
                         }
@@ -259,15 +276,14 @@ export class PhysicsSystem implements System {
         }
 
         // Resolve colisão movendo a entidade para fora do tile
-        if (collisionX || collisionY) {
-            // Resolve na direção de menor sobreposição
-            if (minOverlapX < minOverlapY || !collisionY) {
-                entity.x += pushX;
+        if (minOverlap < Infinity && push !== 0) {
+            if (isXAxis) {
+                entity.x += push;
                 if (entity.vx !== undefined) {
                     entity.vx = 0;
                 }
             } else {
-                entity.y += pushY;
+                entity.y += push;
                 if (entity.vy !== undefined) {
                     entity.vy = 0;
                 }

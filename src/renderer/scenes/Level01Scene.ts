@@ -8,13 +8,16 @@ import { PlayerStatus } from "../ui/PlayerStatus";
 import { CameraSystem } from "../systems/CameraSystem";
 import { TileMap } from "../map/TileMap";
 import { createLevel01Map } from "../map/maps/level01";
+import { PauseMenu } from "../ui/PauseMenu";
 
 
 export class Level01Scene extends Scene {
     private player: Player;
     private debugFPS: DebugFPS;
     private playerStatus: PlayerStatus;
+    private pauseMenu: PauseMenu;
     private tileMap?: TileMap;
+    private escWasPressed: boolean = false;
 
     constructor(){
         super();
@@ -32,6 +35,7 @@ export class Level01Scene extends Scene {
 
         this.debugFPS = new DebugFPS();
         this.playerStatus = new PlayerStatus(this.player);
+        this.pauseMenu = new PauseMenu();
     }
 
     /**
@@ -39,6 +43,9 @@ export class Level01Scene extends Scene {
      */
     onEnter(): void {
         console.log('Level01Scene: onEnter');
+        
+        // Define o estado do jogo para PLAYING quando entra na cena de gameplay
+        this.game?.startPlaying();
         
         const cameraSystem = this.game?.getSystems(CameraSystem);
         cameraSystem?.follow(this.player);
@@ -60,6 +67,7 @@ export class Level01Scene extends Scene {
             renderSystem.registerWorld(this.player);
             renderSystem.registerUI(this.debugFPS);
             renderSystem.registerUI(this.playerStatus);
+            renderSystem.registerUI(this.pauseMenu);
             
             // Configura o tile map no sistema de renderização
             if (this.tileMap) {
@@ -86,6 +94,7 @@ export class Level01Scene extends Scene {
             renderSystem.unregisterWorld(this.player);
             renderSystem.unregisterUI(this.debugFPS);
             renderSystem.unregisterUI(this.playerStatus);
+            renderSystem.unregisterUI(this.pauseMenu);
         }
     }
 
@@ -93,18 +102,51 @@ export class Level01Scene extends Scene {
      * Atualização lógica (inputs, animações, timers)
      */
     update(delta: number): void {
-        // Lógica de atualização do nível
         const inputSystem = this.game?.getSystems(InputSystem);
+        const input = inputSystem?.getState();
+
+        // Verifica se ESC foi pressionado para pausar/retomar
+        if (input) {
+            const escPressed = input.isPressed('Escape');
+            
+            if (escPressed && !this.escWasPressed) {
+                if (this.isPlaying()) {
+                    // Pausa o jogo
+                    this.game?.pause();
+                    this.pauseMenu.show();
+                } else if (this.isPaused()) {
+                    // Retoma o jogo
+                    this.game?.resume();
+                    this.pauseMenu.hide();
+                }
+            }
+            
+            this.escWasPressed = escPressed;
+        }
+
+        // Não atualiza lógica quando pausado
+        if (this.isPaused()) {
+            // Atualiza apenas elementos de UI quando pausado
+            this.debugFPS.update(delta);
+            this.pauseMenu.update(delta);
+            return;
+        }
+
+        // Lógica de atualização do nível
         const actions = inputSystem?.getActions();
 
         if(!actions) return;
 
         // Atualiza o input do player e então atualiza o player
-        this.player.actions = actions;
-        this.player.update(delta);
+        // Apenas quando em gameplay (PLAYING)
+        if (this.isPlaying()) {
+            this.player.actions = actions;
+            this.player.update(delta);
+        }
 
-        // Atualiza elementos de UI
+        // Atualiza elementos de UI (sempre, mesmo quando pausado)
         this.debugFPS.update(delta);
+        this.pauseMenu.update(delta);
     }
 
     /**

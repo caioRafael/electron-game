@@ -11,8 +11,10 @@ import { EventBus } from "./EventBus";
 
 export enum GameStatus {
     STOPPED = 'STOPPED',
-    RUNNING = 'RUNNING',
-    PAUSED = 'PAUSED'
+    MENU = 'MENU',
+    PLAYING = 'PLAYING',
+    PAUSED = 'PAUSED',
+    GAME_OVER = 'GAME_OVER',
   }
 
 
@@ -32,12 +34,25 @@ export class Game {
         this.systems.push(system);
     }
 
+    getStatus(): GameStatus {
+        return this.status;
+    }
+    setStatus(status: GameStatus): void {
+        if(this.status === status) return;
+
+        const previousStatus = this.status;
+        this.status = status;
+        this.eventBus.emit('game:status:changed', { previous: previousStatus, current: status });
+        
+        if(status === GameStatus.GAME_OVER) {
+            this.stop();
+        }
+    }
 
     start(initialScene: Scene){
         console.log('Game started');
         if(this.status !== GameStatus.STOPPED) return;
 
-        this.status = GameStatus.RUNNING;
         initialScene.game = this;
         
         // Inicializa todos os sistemas
@@ -45,22 +60,37 @@ export class Game {
             system.onInit?.();
         }
         
-        this.setScene(initialScene)      
+        this.setScene(initialScene);
+        
+        // O status será definido pela cena no onEnter()
+        // Se não for definido, mantém STOPPED (mas isso não deve acontecer)
 
         this.loop.start(this.update.bind(this));  
     }
 
     //Loop principal do jogo
     private update(delta: number): void {
-        if(this.status !== GameStatus.RUNNING) return;
-
-        // Atualiza a cena primeiro para que possa ler o input antes de ser limpo
-        this.currentScene?.update(delta);
+        // Sempre renderiza, mesmo quando pausado (para manter UI visível)
         this.currentScene?.render();
         
-        // Limpa o estado dos sistemas após a cena processar
+        // Para quando está parado ou game over
+        if(this.status === GameStatus.STOPPED || this.status === GameStatus.GAME_OVER) {
+            return;
+        }
+
+        // Cena sempre recebe update para processar inputs (ex: ESC para pausar/retomar)
+        // Mesmo quando pausado, a cena precisa processar inputs
+        this.currentScene?.update(delta);
+        
+        // InputSystem sempre precisa atualizar para limpar estados de teclas pressionadas
+        // Isso permite que inputs funcionem mesmo quando pausado
+        // Outros sistemas são atualizados apenas quando PLAYING
         for(const system of this.systems){
-            system.onUpdate(delta);
+            // InputSystem sempre atualiza para processar inputs
+            const isInputSystem = system.constructor.name === 'InputSystem';
+            if(isInputSystem || this.status === GameStatus.PLAYING) {
+                system.onUpdate(delta);
+            }
         }
     }
 
@@ -73,13 +103,27 @@ export class Game {
     }
 
     pause(): void{
-        if(this.status !== GameStatus.RUNNING) return;
-        this.status = GameStatus.PAUSED;
+        if(this.status !== GameStatus.PLAYING) return;
+        this.setStatus(GameStatus.PAUSED);
     }
 
     resume(): void{
         if(this.status !== GameStatus.PAUSED) return;
-        this.status = GameStatus.RUNNING;
+        this.setStatus(GameStatus.PLAYING);
+    }
+    
+    /**
+     * Transiciona para o estado de gameplay (PLAYING)
+     */
+    startPlaying(): void {
+        this.setStatus(GameStatus.PLAYING);
+    }
+    
+    /**
+     * Transiciona para o estado de menu (MENU)
+     */
+    showMenu(): void {
+        this.setStatus(GameStatus.MENU);
     }
 
     getSystems<T extends System>(type: new (...args: any[]) => T): T | undefined {

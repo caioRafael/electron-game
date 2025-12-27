@@ -14,6 +14,8 @@ export class MainMenuScene extends Scene {
      */
     onEnter(): void {
         console.log('MainMenuScene: onEnter');
+        // Define o estado do jogo para MENU quando entra no menu
+        this.game?.showMenu();
     }
 
     /**

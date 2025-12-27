@@ -25,6 +25,7 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de tile map**: Mapas baseados em tiles com camadas visuais e de colisão
 - **Sistema de renderização**: Renderização centralizada de entidades e tile maps
 - **Sistema de câmera**: Câmera que segue entidades e aplica transformações de visualização
+- **Sistema de game state**: Separação entre estado do jogo (MENU, PLAYING, PAUSED) e estado da cena
 - **Sistema de entidades**: Arquitetura baseada em entidades com componentes
 - **Renderização Canvas**: Renderização 2D usando Canvas API
 - **Hot Reload**: Recarregamento automático durante o desenvolvimento
@@ -91,7 +92,8 @@ game/
 │       ├── ui/                   # Elementos de interface do usuário
 │       │   ├── UIElement.ts     # Classe base abstrata para elementos de UI
 │       │   ├── DebugFPS.ts      # Elemento de UI para exibir FPS
-│       │   └── PlayerStatus.ts  # Elemento de UI para status do player
+│       │   ├── PlayerStatus.ts  # Elemento de UI para status do player
+│       │   └── PauseMenu.ts     # Menu de pausa do jogo
 │       │
 │       └── scenes/               # Cenas do jogo
 │           ├── MainMenuScene.ts # Cena do menu principal
@@ -169,21 +171,37 @@ start() → loop() → requestAnimationFrame → loop() → ...
 
 Classe central que coordena todos os componentes:
 
-- **Gerenciamento de estado**: STOPPED, RUNNING, PAUSED
+- **Gerenciamento de estado**: STOPPED, MENU, PLAYING, PAUSED, GAME_OVER
 - **Sistemas**: Registra e gerencia sistemas do jogo
 - **Cenas**: Controla a cena atual e transições
 - **Ciclo de atualização**: Orquestra update() e render()
+- **EventBus**: Sistema de eventos para comunicação entre componentes
+
+**Estados do Jogo (`GameStatus`):**
+- `STOPPED`: Jogo parado (inicial)
+- `MENU`: Menu principal ativo
+- `PLAYING`: Gameplay ativo
+- `PAUSED`: Jogo pausado (física pausada, UI ativa)
+- `GAME_OVER`: Fim de jogo
 
 **Fluxo de atualização:**
 ```
-1. Scene.update(delta)    → Lógica da cena (input, atualização de entidades)
-2. Scene.render()          → Renderização (usa RenderSystem)
+1. Scene.render()          → Sempre renderiza (mesmo quando pausado)
+2. Scene.update(delta)     → Sempre atualiza para processar inputs (ex: ESC)
 3. Systems.onUpdate(delta)  → Processamento de sistemas
-   - InputSystem: clearPressed(), clearReleased(), clearAllClicks()
-   - PhysicsSystem: Detecção e resolução de colisões
-   - CameraSystem: Atualiza posição da câmera para seguir o alvo
+   - InputSystem: Sempre atualiza (para processar inputs mesmo quando pausado)
+   - PhysicsSystem: Apenas quando PLAYING (pausa quando PAUSED)
+   - CameraSystem: Apenas quando PLAYING
    - RenderSystem: Não faz nada (renderização é feita pela cena)
 ```
+
+**Métodos principais:**
+- `getStatus()`: Obtém o estado atual do jogo
+- `setStatus(status)`: Define o estado e emite evento `game:status:changed`
+- `startPlaying()`: Transiciona para PLAYING
+- `showMenu()`: Transiciona para MENU
+- `pause()`: Pausa o jogo (PLAYING → PAUSED)
+- `resume()`: Retoma o jogo (PAUSED → PLAYING)
 
 #### 3. **Sistema de Cenas (`Scene.ts`)**
 
@@ -191,22 +209,41 @@ Classe abstrata para diferentes estados do jogo:
 
 - **onEnter()**: Chamado quando a cena é ativada
 - **onExit()**: Chamado quando a cena é desativada
-- **update(delta)**: Atualização lógica a cada frame
-- **render()**: Renderização visual
-- **renderer**: Propriedade protegida com acesso ao CanvasRenderer
-- **game**: Referência opcional ao Game para acessar sistemas
+- **update(delta)**: Atualização lógica a cada frame (sempre chamado, mesmo quando pausado)
+- **render()**: Renderização visual (sempre chamado, mesmo quando pausado)
+- **game**: Referência opcional ao Game para acessar sistemas e estado
+
+**Métodos auxiliares para verificar estado do jogo:**
+- `isStatus(status)`: Verifica se o jogo está em um estado específico
+- `isPaused()`: Verifica se o jogo está pausado
+- `isPlaying()`: Verifica se o jogo está em gameplay
+- `isMenu()`: Verifica se está no menu
 
 **Exemplo de uso:**
 ```typescript
-class MainMenuScene extends Scene {
-    constructor(renderer: CanvasRenderer) {
-        super();
-        this.renderer = renderer;
+class GameplayScene extends Scene {
+    onEnter() { 
+        // Define o estado do jogo quando entra na cena
+        this.game?.startPlaying();
     }
     
-    onEnter() { /* Setup inicial */ }
-    update(delta) { /* Lógica do menu */ }
-    render() { /* Desenhar menu */ }
+    update(delta) { 
+        // Processa inputs mesmo quando pausado (ex: ESC)
+        if (this.isPaused()) {
+            // Lógica de pausa
+            return;
+        }
+        
+        // Lógica de gameplay apenas quando PLAYING
+        if (this.isPlaying()) {
+            // Atualiza entidades, física, etc.
+        }
+    }
+    
+    render() { 
+        // Sempre renderiza (mesmo quando pausado)
+    }
+    
     onExit() { /* Cleanup */ }
 }
 ```
@@ -258,6 +295,8 @@ Sistema pub/sub para comunicação entre componentes:
   - Payload: `{ entityA: Entity, entityB: Entity }`
 - `'trigger:enter'`: Emitido quando uma entidade entra em um TRIGGER
   - Payload: `{ trigger: Entity, other: Entity }`
+- `'game:status:changed'`: Emitido quando o estado do jogo muda
+  - Payload: `{ previous: GameStatus, current: GameStatus }`
 
 **Uso em cenas:**
 ```typescript
@@ -700,12 +739,14 @@ Cena de gameplay demonstrando movimento de player e colisões:
 - Movimento com WASD (w=up, a=left, s=down, d=right)
 - Normalização de vetor de movimento para velocidade consistente em diagonais
 - Movimento baseado em delta time (200 pixels/segundo)
-- Player inicializado no centro da tela
-- Caixa formada por paredes cinzas (SOLID) que bloqueiam o movimento do player
-- Porta marrom (TRIGGER) que detecta quando o player passa por ela sem bloquear movimento
+- Player inicializado no centro do tile map
+- Tile map com bordas sólidas que bloqueiam o movimento do player
 - Sistema de física detecta e resolve colisões automaticamente
 - Sistema de renderização centralizado gerencia a ordem de renderização
 - Câmera segue o player mantendo-o sempre centralizado na tela
+- **Menu de pausa**: Pressione ESC para pausar/retomar o jogo
+  - Quando pausado, física para mas UI permanece ativa
+  - Menu de pausa exibe "PAUSADO" com instruções
 
 ### Criando uma Nova Cena
 
@@ -1046,21 +1087,40 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 ### Game (`engine/Game.ts`)
 
 **Responsabilidades:**
-- Gerenciar estado do jogo (STOPPED, RUNNING, PAUSED)
+- Gerenciar estado do jogo (STOPPED, MENU, PLAYING, PAUSED, GAME_OVER)
 - Coordenar sistemas e cenas
 - Controlar o ciclo de atualização
 - Gerenciar EventBus para comunicação entre componentes
+- Separar estado do jogo do estado da cena
 
 **Propriedades:**
 - `eventBus`: Instância pública do EventBus para comunicação entre sistemas e cenas
 
+**Estados do Jogo:**
+- `STOPPED`: Jogo parado (inicial)
+- `MENU`: Menu principal ativo
+- `PLAYING`: Gameplay ativo (física e sistemas funcionando)
+- `PAUSED`: Jogo pausado (física pausada, UI e inputs ativos)
+- `GAME_OVER`: Fim de jogo
+
 **Métodos principais:**
 - `start(scene)`: Inicia o jogo com uma cena inicial
 - `setScene(scene)`: Troca de cena
-- `pause()` / `resume()`: Controle de pausa
+- `getStatus()`: Obtém o estado atual do jogo
+- `setStatus(status)`: Define o estado e emite evento `game:status:changed`
+- `startPlaying()`: Transiciona para PLAYING
+- `showMenu()`: Transiciona para MENU
+- `pause()`: Pausa o jogo (PLAYING → PAUSED)
+- `resume()`: Retoma o jogo (PAUSED → PLAYING)
 - `stop()`: Finaliza o jogo
 - `getSystems<T>(type)`: Obtém um sistema específico
 - `addSystem(system)`: Adiciona um sistema ao jogo (define automaticamente `system.game = this`)
+
+**Comportamento do Loop:**
+- Sempre renderiza a cena (mesmo quando pausado)
+- Sempre atualiza a cena (para processar inputs como ESC)
+- InputSystem sempre atualiza (para processar inputs mesmo quando pausado)
+- Outros sistemas atualizam apenas quando `PLAYING` (física pausa quando `PAUSED`)
 
 ### Loop (`engine/Loop.ts`)
 
@@ -1141,6 +1201,7 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - Detectar sobreposição com entidades TRIGGER (não bloqueia)
 - Verificar colisões entre entidades e tiles sólidos do tile map
 - Detectar triggers do tile map
+- **Pausa automaticamente quando o jogo não está em PLAYING**
 
 **Métodos:**
 - `registerEntity(entity)`: Registra entidade para processamento de física
@@ -1150,6 +1211,7 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 
 **Como funciona:**
 - Usa detecção AABB (Axis-Aligned Bounding Box)
+- **Pausa automática**: Não processa colisões quando `game.status !== PLAYING`
 - **Colisão SOLID vs SOLID**: 
   - Se pelo menos um objeto está em movimento: resolve colisão movendo entidade para fora, calcula sobreposição em X e Y, move na direção de menor sobreposição, zera velocidade (`vx`/`vy`) quando aplicável, emite evento `collision`
   - Se ambos são estáticos: ignora (não processa colisão)
@@ -1158,7 +1220,7 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
   - Se ambos são estáticos: ignora (evita eventos constantes)
 - **Colisão com Tile Map**:
   - Verifica todos os tiles que a entidade está sobrepondo
-  - Resolve colisões com tiles sólidos movendo a entidade para fora
+  - Resolve colisões em X e Y separadamente para evitar atravessar paredes em diagonal
   - Detecta triggers do tile map e emite eventos `trigger:enter`
 
 ### CameraSystem (`systems/CameraSystem.ts`)
@@ -1262,6 +1324,25 @@ this.game?.eventBus.off('trigger:enter', this.handler);
 **Métodos abstratos:**
 - `update(delta)`: Atualização lógica a cada frame
 - `render()`: Renderização visual
+
+### Scene (`engine/Scene.ts`)
+
+**Responsabilidades:**
+- Classe abstrata base para todas as cenas
+- Fornece acesso ao Game e sistemas
+- Métodos auxiliares para verificar estado do jogo
+
+**Métodos auxiliares:**
+- `isStatus(status)`: Verifica se o jogo está em um estado específico
+- `isPaused()`: Verifica se o jogo está pausado
+- `isPlaying()`: Verifica se o jogo está em gameplay
+- `isMenu()`: Verifica se está no menu
+
+**Métodos abstratos:**
+- `onEnter()`: Chamado quando a cena é ativada
+- `onExit()`: Chamado quando a cena é desativada
+- `update(delta)`: Atualização lógica (sempre chamado, mesmo quando pausado)
+- `render()`: Renderização visual (sempre chamado, mesmo quando pausado)
 
 ### PhysicsBody (`physics/PhysicsBody.ts`)
 
