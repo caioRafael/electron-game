@@ -45,7 +45,7 @@ export class InputSystem implements System {
 
     private onKeyDown(event: KeyboardEvent): void {
         if (!this.pressedKeys.has(event.key)) {
-            console.log('Key pressed:', event.key, 'Code:', event.code);
+            // console.log('Key pressed:', event.key, 'Code:', event.code);
             this.pressedKeys.add(event.key);
             this.state.setKey(event.key, 'pressed');
         }

@@ -2,9 +2,12 @@ import { System } from "../engine/System";
 import { Entity } from "../entities/Entity";
 import { ColliderType } from "../physics/ColliderType";
 import { PhysicsBody } from "../physics/PhysicsBody";
+import { Game } from "../engine/Game";
 
 export class PhysicsSystem implements System {
+    game?: Game;
     private entities: (Entity & Partial<PhysicsBody>)[] = [];
+    
 
     onInit(): void {
         // Inicialização do sistema de física
@@ -61,19 +64,38 @@ export class PhysicsSystem implements System {
                 const aIsSolid = entityA.colliderType === ColliderType.SOLID;
                 const bIsSolid = entityB.colliderType === ColliderType.SOLID;
 
-                //BLOQUEIA
-                if(aIsSolid && bIsSolid) {
+                // Verifica se ambos são estáticos (sem velocidade)
+                const aIsStatic = entityA.vx === undefined && entityA.vy === undefined;
+                const bIsStatic = entityB.vx === undefined && entityB.vy === undefined;
+                const bothStatic = aIsStatic && bIsStatic;
+
+                //BLOQUEIA - apenas resolve colisão se pelo menos um objeto está em movimento
+                if(aIsSolid && bIsSolid && !bothStatic) {
                     this.resolveCollision(entityA, entityB);
-                    entityA.onCollision?.(entityB);
-                    entityB.onCollision?.(entityA);
+
+                    this.game?.eventBus.emit('collision', {entityA, entityB})
+                    // entityA.onCollision?.(entityB);
+                    // entityB.onCollision?.(entityA);
                 }
 
-                // TRIGGER
-                if(entityA.colliderType === ColliderType.TRIGGER) {
-                    entityA.onTrigger?.(entityB);
-                }
-                if(entityB.colliderType === ColliderType.TRIGGER) {
-                    entityB.onTrigger?.(entityA);
+                // TRIGGER - apenas emite se pelo menos um objeto está em movimento
+                // Isso evita que objetos estáticos (como parede e porta) gerem eventos constantes
+                if(!bothStatic) {
+                    console.log('teste porta: ', {entityA, entityB})
+                    if(entityA.colliderType === ColliderType.TRIGGER) {
+                        console.log('teste porta entityA é o trigger: ', {entityA, entityB})
+                        this.game?.eventBus.emit('trigger:enter', {
+                            trigger: entityA,
+                            other: entityB
+                        })
+                    }
+                    if(entityB.colliderType === ColliderType.TRIGGER) {
+                        console.log('teste porta entityB é o trigger: ', {entityA, entityB})
+                        this.game?.eventBus.emit('trigger:enter', {
+                            trigger: entityB,
+                            other: entityA
+                        })
+                    }
                 }
             }
         }

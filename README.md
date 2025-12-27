@@ -53,7 +53,8 @@ game/
 │       │   ├── Game.ts          # Classe principal do jogo
 │       │   ├── Loop.ts          # Game loop com requestAnimationFrame
 │       │   ├── Scene.ts         # Interface para cenas
-│       │   └── System.ts        # Interface para sistemas
+│       │   ├── System.ts        # Interface para sistemas
+│       │   └── EventBus.ts      # Sistema de eventos pub/sub
 │       │
 │       ├── systems/              # Sistemas do jogo
 │       │   ├── InputSystem.ts   # Sistema de input (teclado e mouse)
@@ -67,7 +68,7 @@ game/
 │       │   └── Wall.ts          # Entidade de parede
 │       │
 │       ├── physics/              # Sistema de física
-│       │   ├── PhysicsBody.ts   # Interface para corpos físicos
+│       │   ├── PhysicsBody.ts   # Classe abstrata para corpos físicos
 │       │   └── ColliderType.ts   # Tipos de collider (SOLID, TRIGGER)
 │       │
 │       ├── input/                # Gerenciamento de input
@@ -205,6 +206,7 @@ class MainMenuScene extends Scene {
 
 Interface para componentes modulares:
 
+- **game**: Referência opcional ao Game (definida automaticamente ao adicionar sistema)
 - **onInit()**: Inicialização (opcional)
 - **onUpdate(delta)**: Atualização a cada frame
 - **onDestroy()**: Cleanup (opcional)
@@ -213,6 +215,61 @@ Interface para componentes modulares:
 - `InputSystem`: Captura eventos de teclado e mouse
 - `PhysicsSystem`: Detecta e resolve colisões entre entidades
 - `RenderSystem`: Gerencia renderização centralizada de entidades
+- `CameraSystem`: Gerencia posição e movimento da câmera
+
+**Acesso ao Game:**
+Sistemas podem acessar o Game através de `this.game` após serem adicionados:
+```typescript
+export class MySystem implements System {
+    game?: Game;
+    
+    onUpdate(delta: number): void {
+        // Acessa o EventBus do jogo
+        this.game?.eventBus.emit('my-event', { data: 'value' });
+    }
+}
+```
+
+#### 5. **Sistema de Eventos (`EventBus.ts`)**
+
+Sistema pub/sub para comunicação entre componentes:
+
+- **Suporta múltiplos listeners por evento**: Cada evento pode ter vários listeners registrados
+- **Type-safe**: Tipagem genérica para eventos
+- **Gerenciamento automático**: Limpa listeners quando não há mais nenhum
+
+**Métodos principais:**
+- `on<T>(event, listener)`: Registra um listener para um evento
+- `off<T>(event, listener)`: Remove um listener de um evento
+- `emit<T>(event, data)`: Emite um evento para todos os listeners registrados
+- `clear()`: Limpa todos os listeners
+
+**Eventos padrão:**
+- `'collision'`: Emitido quando duas entidades SOLID colidem
+  - Payload: `{ entityA: Entity, entityB: Entity }`
+- `'trigger:enter'`: Emitido quando uma entidade entra em um TRIGGER
+  - Payload: `{ trigger: Entity, other: Entity }`
+
+**Uso em cenas:**
+```typescript
+onEnter(): void {
+    // Usar arrow function para preservar contexto 'this'
+    this.triggerHandler = (event) => this.onTriggerEnter(event);
+    this.game?.eventBus.on('trigger:enter', this.triggerHandler);
+}
+
+private onTriggerEnter(event: {trigger: PhysicsBody, other: PhysicsBody}): void {
+    if(event.trigger instanceof Door && event.other instanceof Player) {
+        this.game?.setScene(new NextScene());
+    }
+}
+
+onExit(): void {
+    if (this.triggerHandler) {
+        this.game?.eventBus.off('trigger:enter', this.triggerHandler);
+    }
+}
+```
 
 #### 5. **Sistema de Input**
 
@@ -285,28 +342,61 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 - Suporta dois tipos de colliders: **SOLID** e **TRIGGER**
 - **SOLID**: Bloqueia movimento e resolve colisão fisicamente
 - **TRIGGER**: Detecta sobreposição sem bloquear movimento
+- **Otimização**: Ignora colisões entre objetos estáticos (sem velocidade) para evitar processamento desnecessário
+- **Eventos**: Emite eventos através do EventBus do Game (`collision`, `trigger:enter`)
 
 **ColliderType (`physics/ColliderType.ts`)**:
 - Enum que define os tipos de collider disponíveis:
-  - `SOLID`: Bloqueia movimento, resolve colisão e chama `onCollision`
-  - `TRIGGER`: Detecta sobreposição sem bloquear, chama `onTrigger`
+  - `SOLID`: Bloqueia movimento, resolve colisão e emite evento `collision`
+  - `TRIGGER`: Detecta sobreposição sem bloquear, emite evento `trigger:enter`
 
 **PhysicsBody (`physics/PhysicsBody.ts`)**:
-- Interface para entidades físicas
+- **Classe abstrata** para entidades físicas (não mais interface)
 - Propriedades:
-  - `vx`, `vy`: Velocidade horizontal e vertical (opcional)
-  - `colliderType`: Tipo de collider (`ColliderType.SOLID` ou `ColliderType.TRIGGER`)
-  - `onCollision?(other)`: Callback chamado quando há colisão entre dois SOLID
-  - `onTrigger?(other)`: Callback chamado quando um TRIGGER detecta sobreposição
+  - `vx?`, `vy?`: Velocidade horizontal e vertical (opcional, apenas para entidades móveis)
+  - `colliderType`: Tipo de collider (`ColliderType.SOLID` ou `ColliderType.TRIGGER`) - **abstrato, deve ser implementado**
+  - `onCollision?(other)`: Callback opcional chamado quando há colisão entre dois SOLID
+  - `onTrigger?(other)`: Callback opcional chamado quando um TRIGGER detecta sobreposição
 
 **Comportamento:**
-- **Colisão SOLID vs SOLID**: Resolve colisão (move entidade para fora) e chama `onCollision` em ambas
-- **Colisão TRIGGER vs qualquer**: Não resolve colisão, apenas chama `onTrigger` no TRIGGER
+- **Colisão SOLID vs SOLID**: 
+  - Se pelo menos um objeto está em movimento: resolve colisão (move entidade para fora) e emite evento `collision`
+  - Se ambos são estáticos: ignora (não resolve nem emite eventos)
+- **Colisão TRIGGER vs qualquer**: 
+  - Se pelo menos um objeto está em movimento: emite evento `trigger:enter`
+  - Se ambos são estáticos: ignora (evita eventos constantes entre objetos fixos)
+
+**Detecção de objetos estáticos:**
+- Um objeto é considerado estático se `vx === undefined && vy === undefined`
+- Objetos com `vx` e `vy` definidos (mesmo que sejam 0) são considerados móveis
 
 **Métodos principais:**
 - `registerEntity(entity)`: Registra entidade para processamento de física
 - `unregisterEntity(entity)`: Remove entidade
 - `clearEntities()`: Limpa todas as entidades
+
+**Uso com EventBus:**
+```typescript
+// Na cena, escutar eventos de física
+onEnter(): void {
+    this.triggerHandler = (event) => this.onTriggerEnter(event);
+    this.game?.eventBus.on('trigger:enter', this.triggerHandler);
+    
+    this.collisionHandler = (event) => this.onCollision(event);
+    this.game?.eventBus.on('collision', this.collisionHandler);
+}
+
+private onTriggerEnter(event: {trigger: PhysicsBody, other: PhysicsBody}): void {
+    if(event.trigger instanceof Door && event.other instanceof Player) {
+        // Player entrou na porta
+        this.game?.setScene(new NextScene());
+    }
+}
+
+private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
+    // Duas entidades SOLID colidiram
+}
+```
 
 #### 8. **Sistema de Câmera**
 
@@ -804,6 +894,10 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - Gerenciar estado do jogo (STOPPED, RUNNING, PAUSED)
 - Coordenar sistemas e cenas
 - Controlar o ciclo de atualização
+- Gerenciar EventBus para comunicação entre componentes
+
+**Propriedades:**
+- `eventBus`: Instância pública do EventBus para comunicação entre sistemas e cenas
 
 **Métodos principais:**
 - `start(scene)`: Inicia o jogo com uma cena inicial
@@ -811,6 +905,7 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - `pause()` / `resume()`: Controle de pausa
 - `stop()`: Finaliza o jogo
 - `getSystems<T>(type)`: Obtém um sistema específico
+- `addSystem(system)`: Adiciona um sistema ao jogo (define automaticamente `system.game = this`)
 
 ### Loop (`engine/Loop.ts`)
 
@@ -897,8 +992,12 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 
 **Como funciona:**
 - Usa detecção AABB (Axis-Aligned Bounding Box)
-- **Colisão SOLID vs SOLID**: Resolve colisão movendo entidade para fora, calcula sobreposição em X e Y, move na direção de menor sobreposição, zera velocidade (`vx`/`vy`) quando aplicável, chama `onCollision` em ambas entidades
-- **Colisão TRIGGER vs qualquer**: Não resolve colisão, apenas chama `onTrigger` no TRIGGER quando detecta sobreposição
+- **Colisão SOLID vs SOLID**: 
+  - Se pelo menos um objeto está em movimento: resolve colisão movendo entidade para fora, calcula sobreposição em X e Y, move na direção de menor sobreposição, zera velocidade (`vx`/`vy`) quando aplicável, emite evento `collision`
+  - Se ambos são estáticos: ignora (não processa colisão)
+- **Colisão TRIGGER vs qualquer**: 
+  - Se pelo menos um objeto está em movimento: emite evento `trigger:enter` através do EventBus
+  - Se ambos são estáticos: ignora (evita eventos constantes)
 
 ### CameraSystem (`systems/CameraSystem.ts`)
 
@@ -954,6 +1053,38 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - Isso desloca todas as entidades baseado na posição da câmera
 - Restaura a transformação antes de renderizar UI (UI fica fixa)
 
+### EventBus (`engine/EventBus.ts`)
+
+**Responsabilidades:**
+- Sistema pub/sub para comunicação entre componentes
+- Suporta múltiplos listeners por evento
+- Type-safe com tipagem genérica
+
+**Métodos:**
+- `on<T>(event, listener)`: Registra um listener para um evento
+- `off<T>(event, listener)`: Remove um listener de um evento
+- `emit<T>(event, data)`: Emite um evento para todos os listeners registrados
+- `clear()`: Limpa todos os listeners
+
+**Eventos padrão:**
+- `'collision'`: Emitido quando duas entidades SOLID colidem
+  - Payload: `{ entityA: Entity, entityB: Entity }`
+- `'trigger:enter'`: Emitido quando uma entidade entra em um TRIGGER
+  - Payload: `{ trigger: Entity, other: Entity }`
+
+**Uso:**
+```typescript
+// Registrar listener (usar arrow function para preservar contexto)
+this.handler = (event) => this.onEvent(event);
+this.game?.eventBus.on('trigger:enter', this.handler);
+
+// Emitir evento
+this.game?.eventBus.emit('my-event', { data: 'value' });
+
+// Remover listener
+this.game?.eventBus.off('trigger:enter', this.handler);
+```
+
 ### Entity (`entities/Entity.ts`)
 
 **Responsabilidades:**
@@ -971,14 +1102,17 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 
 ### PhysicsBody (`physics/PhysicsBody.ts`)
 
-**Interface para entidades físicas:**
-- `vx`: Velocidade horizontal (opcional, apenas para entidades móveis)
-- `vy`: Velocidade vertical (opcional, apenas para entidades móveis)
-- `colliderType`: Tipo de collider (`ColliderType.SOLID` ou `ColliderType.TRIGGER`)
+**Classe abstrata para entidades físicas:**
+- `vx?`: Velocidade horizontal (opcional, apenas para entidades móveis)
+- `vy?`: Velocidade vertical (opcional, apenas para entidades móveis)
+- `colliderType`: Tipo de collider (`ColliderType.SOLID` ou `ColliderType.TRIGGER`) - **propriedade abstrata, deve ser implementada**
 - `onCollision?(other)`: Callback opcional chamado quando há colisão entre dois SOLID
 - `onTrigger?(other)`: Callback opcional chamado quando um TRIGGER detecta sobreposição
 
-**Nota:** Entidades estáticas podem implementar `Partial<PhysicsBody>` e definir apenas `colliderType`. Entidades móveis devem implementar `PhysicsBody` completo incluindo `vx` e `vy`.
+**Nota:** 
+- Entidades estáticas podem implementar `Partial<PhysicsBody>` e definir apenas `colliderType`
+- Entidades móveis devem implementar `PhysicsBody` completo incluindo `vx` e `vy`
+- Como é uma classe abstrata, você pode estender ou implementar parcialmente usando `Partial<PhysicsBody>`
 
 ### ColliderType (`physics/ColliderType.ts`)
 
@@ -1000,11 +1134,14 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - ✅ Transformação de câmera aplicada ao mundo (UI fixa na tela)
 - ✅ Sistema de entidades (Entity, Player, Wall, Door)
 - ✅ Sistema de colliders: SOLID (bloqueia movimento) e TRIGGER (detecta sem bloquear)
+- ✅ Sistema de eventos (EventBus) para comunicação entre componentes
+- ✅ Otimização de física: ignora colisões entre objetos estáticos
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Cena de menu principal (MainMenuScene)
 - ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões
 - ✅ Movimento de player com WASD e normalização de vetor
 - ✅ Colisões entre player e paredes
+- ✅ Eventos de trigger para mudança de cena
 - ✅ Hot reload em desenvolvimento
 - ✅ Build separado para main e renderer processes
 

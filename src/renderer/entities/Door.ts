@@ -22,6 +22,6 @@ export class Door extends Entity implements Partial<PhysicsBody> {
     }
 
     onTrigger?(other: Partial<PhysicsBody>): void {
-        console.log('Player colidiu com a porta');
+        console.log('Player colidiu com a porta onTrigger 12345');
     }
 }

@@ -8,6 +8,8 @@ import { Door } from "../entities/Door";
 import { DebugFPS } from "../ui/DebugFPS";
 import { PlayerStatus } from "../ui/PlayerStatus";
 import { CameraSystem } from "../systems/CameraSystem";
+import { PhysicsBody } from "../physics/PhysicsBody";
+import { MainMenuScene } from "./MainMenuScene";
 
 
 export class Level01Scene extends Scene {
@@ -15,10 +17,11 @@ export class Level01Scene extends Scene {
     private wallTop: Wall;
     private wallBottom: Wall;
     private wallLeft: Wall;
-    private wallRight: Wall;
+    // private wallRight: Wall;
     private door: Door;
     private debugFPS: DebugFPS;
     private playerStatus: PlayerStatus;
+    private triggerEnterHandler?: (event: {trigger: PhysicsBody, other: PhysicsBody}) => void;
 
     constructor(){
         super();
@@ -43,7 +46,7 @@ export class Level01Scene extends Scene {
         // Parede esquerda
         this.wallLeft = new Wall(boxLeft, boxTop + wallThickness, wallThickness, boxHeight - 2 * wallThickness);
         // Parede direita
-        this.wallRight = new Wall(boxLeft + boxWidth - wallThickness, boxTop + wallThickness, wallThickness, boxHeight - 2 * wallThickness);
+        // this.wallRight = new Wall(boxLeft + boxWidth - wallThickness, boxTop + wallThickness, wallThickness, boxHeight - 2 * wallThickness);
 
         // Porta na parede direita (centro vertical)
         const doorWidth = 80;
@@ -72,7 +75,7 @@ export class Level01Scene extends Scene {
             physicsSystem.registerEntity(this.wallTop);
             physicsSystem.registerEntity(this.wallBottom);
             physicsSystem.registerEntity(this.wallLeft);
-            physicsSystem.registerEntity(this.wallRight);
+            // physicsSystem.registerEntity(this.wallRight);
             physicsSystem.registerEntity(this.door);
         }
 
@@ -83,11 +86,31 @@ export class Level01Scene extends Scene {
             renderSystem.registerWorld(this.wallTop);
             renderSystem.registerWorld(this.wallBottom);
             renderSystem.registerWorld(this.wallLeft);
-            renderSystem.registerWorld(this.wallRight);
+            // renderSystem.registerWorld(this.wallRight);
             renderSystem.registerWorld(this.door);
             renderSystem.registerWorld(this.player);
             renderSystem.registerUI(this.debugFPS);
             renderSystem.registerUI(this.playerStatus);
+        }
+
+        this.triggerEnterHandler = (event) => this.onTriggerEnter(event);
+        this.game?.eventBus.on('trigger:enter', this.triggerEnterHandler);
+        // this.game?.eventBus.on('collision', this.onCollision);
+    }
+
+    private onTriggerEnter(event: {trigger: PhysicsBody, other: PhysicsBody}): void {
+        console.log('Trigger entered:', event);
+        if(event.trigger instanceof Door && event.other instanceof Player) {
+            console.log('Player colidiu com a porta teste na cena');
+            this.game?.setScene(new MainMenuScene());
+        }
+    }
+
+    private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
+        console.log('Collision:', event);
+        if(event.entityA instanceof Player && event.entityB instanceof Wall) {
+            console.log('Player colidiu com a parede teste na cena');
+            // this.game?.setScene(new MainMenuScene());
         }
     }
 
@@ -104,7 +127,7 @@ export class Level01Scene extends Scene {
             physicsSystem.unregisterEntity(this.wallTop);
             physicsSystem.unregisterEntity(this.wallBottom);
             physicsSystem.unregisterEntity(this.wallLeft);
-            physicsSystem.unregisterEntity(this.wallRight);
+            // physicsSystem.unregisterEntity(this.wallRight);
             physicsSystem.unregisterEntity(this.door);
         }
 
@@ -115,11 +138,16 @@ export class Level01Scene extends Scene {
             renderSystem.unregisterWorld(this.wallTop);
             renderSystem.unregisterWorld(this.wallBottom);
             renderSystem.unregisterWorld(this.wallLeft);
-            renderSystem.unregisterWorld(this.wallRight);
+            // renderSystem.unregisterWorld(this.wallRight);
             renderSystem.unregisterWorld(this.door);
             renderSystem.unregisterUI(this.debugFPS);
             renderSystem.unregisterUI(this.playerStatus);
         }
+
+        if (this.triggerEnterHandler) {
+            this.game?.eventBus.off('trigger:enter', this.triggerEnterHandler);
+        }
+        // this.game?.eventBus.off('collision', this.onCollision);
     }
 
     /**
@@ -140,7 +168,7 @@ export class Level01Scene extends Scene {
         this.wallTop.update(delta);
         this.wallBottom.update(delta);
         this.wallLeft.update(delta);
-        this.wallRight.update(delta);
+        // this.wallRight.update(delta);
         this.door.update(delta);
 
         // Atualiza elementos de UI
@@ -163,7 +191,7 @@ export class Level01Scene extends Scene {
             this.wallTop.render();
             this.wallBottom.render();
             this.wallLeft.render();
-            this.wallRight.render();
+            // this.wallRight.render();
             this.player.render();
             this.debugFPS.render();
             this.playerStatus.render();

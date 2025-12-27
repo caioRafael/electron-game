@@ -7,6 +7,7 @@
 import { System } from "./System";
 import { Loop } from "./Loop";
 import { Scene } from "./Scene";
+import { EventBus } from "./EventBus";
 
 export enum GameStatus {
     STOPPED = 'STOPPED',
@@ -20,12 +21,14 @@ export class Game {
     private loop: Loop;
     private status: GameStatus = GameStatus.STOPPED;
     private currentScene: Scene | null = null;
+    public readonly eventBus = new EventBus();
 
     constructor(loop: Loop){
         this.loop = loop;
     }
 
     addSystem(system: System): void {
+        system.game = this;
         this.systems.push(system);
     }
 

@@ -1,11 +1,11 @@
 import { ColliderType } from "./ColliderType";
 
-export interface PhysicsBody {
-    vx: number;
-    vy: number;
+export abstract class PhysicsBody {
+    vx?: number;
+    vy?: number;
     // solid: boolean;
 
-    colliderType: ColliderType;
+    abstract colliderType: ColliderType;
 
     onCollision?(other: Partial<PhysicsBody>): void;
     onTrigger?(other: Partial<PhysicsBody>): void;
