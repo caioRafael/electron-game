@@ -21,8 +21,9 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de cenas**: Gerenciamento de diferentes estados do jogo (menu, gameplay, etc.)
 - **Game Loop**: Loop de atualização baseado em `requestAnimationFrame` com cálculo de delta time
 - **Sistema de input**: Captura e processamento de eventos de teclado e mouse
-- **Sistema de física**: Detecção e resolução de colisões entre entidades
-- **Sistema de renderização**: Renderização centralizada de entidades
+- **Sistema de física**: Detecção e resolução de colisões entre entidades e tiles
+- **Sistema de tile map**: Mapas baseados em tiles com camadas visuais e de colisão
+- **Sistema de renderização**: Renderização centralizada de entidades e tile maps
 - **Sistema de câmera**: Câmera que segue entidades e aplica transformações de visualização
 - **Sistema de entidades**: Arquitetura baseada em entidades com componentes
 - **Renderização Canvas**: Renderização 2D usando Canvas API
@@ -71,13 +72,21 @@ game/
 │       │   ├── PhysicsBody.ts   # Classe abstrata para corpos físicos
 │       │   └── ColliderType.ts   # Tipos de collider (SOLID, TRIGGER)
 │       │
+│       ├── map/                   # Sistema de tile map
+│       │   ├── TileMap.ts       # Classe principal do tile map
+│       │   ├── TileLayer.ts     # Camada de tiles (visual e colisão)
+│       │   ├── TileTypes.ts     # Tipos de colisão de tiles
+│       │   └── maps/            # Mapas do jogo
+│       │       └── level01.ts   # Mapa do nível 01
+│       │
 │       ├── input/                # Gerenciamento de input
 │       │   ├── InputState.ts    # Estado das teclas pressionadas
 │       │   └── MouseState.ts    # Estado do mouse (posição e botões)
 │       │
 │       ├── rendering/            # Renderização
 │       │   ├── CanvasRenderer.ts # Renderizador Canvas 2D
-│       │   └── Camera.ts         # Classe de câmera
+│       │   ├── Camera.ts         # Classe de câmera
+│       │   └── TileMapRenderer.ts # Renderizador de tile map
 │       │
 │       ├── ui/                   # Elementos de interface do usuário
 │       │   ├── UIElement.ts     # Classe base abstrata para elementos de UI
@@ -365,6 +374,11 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 - **Colisão TRIGGER vs qualquer**: 
   - Se pelo menos um objeto está em movimento: emite evento `trigger:enter`
   - Se ambos são estáticos: ignora (evita eventos constantes entre objetos fixos)
+- **Colisão com Tile Map**:
+  - Verifica colisões entre entidades sólidas e tiles sólidos do mapa
+  - Resolve colisões movendo a entidade para fora do tile na direção de menor sobreposição
+  - Zera velocidade na direção da colisão
+  - Detecta triggers do tile map e emite eventos `trigger:enter`
 
 **Detecção de objetos estáticos:**
 - Um objeto é considerado estático se `vx === undefined && vy === undefined`
@@ -374,6 +388,7 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 - `registerEntity(entity)`: Registra entidade para processamento de física
 - `unregisterEntity(entity)`: Remove entidade
 - `clearEntities()`: Limpa todas as entidades
+- `setTileMap(tileMap)`: Define o tile map para verificação de colisões
 
 **Uso com EventBus:**
 ```typescript
@@ -398,7 +413,147 @@ private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
 }
 ```
 
-#### 8. **Sistema de Câmera**
+#### 8. **Sistema de Tile Map**
+
+**TileMap (`map/TileMap.ts`)**:
+- Representa um mapa baseado em tiles
+- Suporta duas camadas: visual (renderização) e colisão (física)
+- Propriedades:
+  - `tileSize`: Tamanho de cada tile em pixels
+  - `width`, `height`: Dimensões do mapa em tiles
+  - `visualLayer`: Camada visual para renderização
+  - `collisionLayer`: Camada de colisão para física
+
+**TileLayer (`map/TileLayer.ts`)**:
+- Representa uma camada de tiles
+- Armazena dados como array unidimensional
+- Métodos:
+  - `getTile(x, y)`: Obtém o valor do tile na posição (retorna -1 se fora dos limites)
+
+**TileCollisionType (`map/TileTypes.ts`)**:
+- Enum que define tipos de colisão de tiles:
+  - `NONE`: Tile vazio, sem colisão
+  - `SOLID`: Tile sólido, bloqueia movimento
+  - `TRIGGER`: Tile trigger, detecta quando entidades passam
+
+**Métodos principais do TileMap:**
+- `worldToTile(value)`: Converte coordenada do mundo para coordenada de tile
+- `isSolidAt(worldX, worldY)`: Verifica se há um tile sólido na posição do mundo
+- `getTriggerAt(worldX, worldY)`: Obtém o tipo de trigger na posição (ou null)
+
+**TileMapRenderer (`rendering/TileMapRenderer.ts`)**:
+- Renderiza o tile map na tela
+- Otimização: renderiza apenas tiles visíveis na viewport da câmera
+- Métodos:
+  - `render(map, camera)`: Renderiza o mapa aplicando a câmera
+
+**Criando um Tile Map:**
+
+```typescript
+import { TileLayer } from "../map/TileLayer";
+import { TileMap } from "../map/TileMap";
+import { TileCollisionType } from "../map/TileTypes";
+
+export function createMyMap(): TileMap {
+    const tileSize = 32;
+    const width = 20;
+    const height = 15;
+
+    // Camada visual: dados dos tiles visuais
+    const visualData: number[] = [];
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            // Define o tipo visual do tile (ex: 0=vazio, 1=grama, 2=terra)
+            if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+                visualData.push(2); // Terra nas bordas
+            } else {
+                visualData.push(1); // Grama no centro
+            }
+        }
+    }
+    const visualLayer = new TileLayer(width, height, visualData);
+
+    // Camada de colisão: dados de colisão dos tiles
+    const collisionData: number[] = [];
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            // Bordas são sólidas
+            if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+                collisionData.push(TileCollisionType.SOLID);
+            } else {
+                collisionData.push(TileCollisionType.NONE);
+            }
+        }
+    }
+    // Adiciona um trigger em uma posição específica
+    const triggerX = width - 2;
+    const triggerY = Math.floor(height / 2);
+    collisionData[triggerY * width + triggerX] = TileCollisionType.TRIGGER;
+    
+    const collisionLayer = new TileLayer(width, height, collisionData);
+
+    return new TileMap({
+        tileSize,
+        width,
+        height,
+        visualLayer,
+        collisionLayer,
+    });
+}
+```
+
+**Usando Tile Map em uma Cena:**
+
+```typescript
+import { TileMap } from "../map/TileMap";
+import { createMyMap } from "../map/maps/myMap";
+
+export class MyScene extends Scene {
+    private tileMap?: TileMap;
+
+    constructor() {
+        super();
+        this.tileMap = createMyMap();
+    }
+
+    onEnter(): void {
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+
+        // Configura o tile map no sistema de renderização
+        if (renderSystem && this.tileMap) {
+            renderSystem.setTileMap(this.tileMap);
+        }
+
+        // Configura o tile map no sistema de física para colisões
+        if (physicsSystem && this.tileMap) {
+            physicsSystem.setTileMap(this.tileMap);
+        }
+    }
+
+    onExit(): void {
+        // Remove o tile map dos sistemas
+        const renderSystem = this.game?.getSystems(RenderSystem);
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+
+        renderSystem?.setTileMap(undefined);
+        physicsSystem?.setTileMap(undefined);
+    }
+}
+```
+
+**Integração com Física:**
+- O PhysicsSystem verifica automaticamente colisões entre entidades e tiles sólidos
+- Entidades são movidas para fora dos tiles quando colidem
+- Triggers do tile map emitem eventos `trigger:enter` quando entidades passam por eles
+- Apenas entidades em movimento são verificadas (objetos estáticos são ignorados)
+
+**Integração com Renderização:**
+- O RenderSystem renderiza o tile map antes das entidades
+- A transformação da câmera é aplicada automaticamente
+- Apenas tiles visíveis na viewport são renderizados (otimização)
+
+#### 9. **Sistema de Câmera**
 
 **CameraSystem (`systems/CameraSystem.ts`)**:
 - Gerencia a posição e movimento da câmera
@@ -984,11 +1139,14 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - Detectar colisões entre entidades registradas usando AABB
 - Resolver colisões entre entidades SOLID (bloqueia movimento)
 - Detectar sobreposição com entidades TRIGGER (não bloqueia)
+- Verificar colisões entre entidades e tiles sólidos do tile map
+- Detectar triggers do tile map
 
 **Métodos:**
 - `registerEntity(entity)`: Registra entidade para processamento de física
 - `unregisterEntity(entity)`: Remove entidade do sistema
 - `clearEntities()`: Limpa todas as entidades registradas
+- `setTileMap(tileMap)`: Define o tile map para verificação de colisões
 
 **Como funciona:**
 - Usa detecção AABB (Axis-Aligned Bounding Box)
@@ -998,6 +1156,10 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - **Colisão TRIGGER vs qualquer**: 
   - Se pelo menos um objeto está em movimento: emite evento `trigger:enter` através do EventBus
   - Se ambos são estáticos: ignora (evita eventos constantes)
+- **Colisão com Tile Map**:
+  - Verifica todos os tiles que a entidade está sobrepondo
+  - Resolve colisões com tiles sólidos movendo a entidade para fora
+  - Detecta triggers do tile map e emite eventos `trigger:enter`
 
 ### CameraSystem (`systems/CameraSystem.ts`)
 
@@ -1029,8 +1191,8 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 ### RenderSystem (`systems/RenderSystem.ts`)
 
 **Responsabilidades:**
-- Centralizar renderização de entidades e elementos de UI
-- Gerenciar ordem de renderização (world primeiro, depois UI)
+- Centralizar renderização de entidades, tile maps e elementos de UI
+- Gerenciar ordem de renderização (tile map primeiro, depois entidades, depois UI)
 - Aplicar transformação da câmera ao renderizar o mundo
 - Elementos de UI não são afetados pela câmera (fixos na tela)
 - Controlar cor de fundo do canvas
@@ -1041,7 +1203,8 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - `unregisterWorld(entity)`: Remove entidade
 - `registerUI(element)`: Registra elemento de UI para renderização (injeta RenderSystem)
 - `unregisterUI(element)`: Remove elemento de UI
-- `render()`: Limpa canvas, aplica câmera, renderiza entidades e depois elementos de UI
+- `setTileMap(tileMap)`: Define o tile map para renderização
+- `render()`: Limpa canvas, aplica câmera, renderiza tile map, entidades e depois elementos de UI
 - `renderEntities()`: Renderiza apenas entidades (sem limpar canvas)
 - `clear()`: Limpa apenas o canvas
 - `setBackgroundColor(color)`: Define cor de fundo
@@ -1050,7 +1213,7 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 
 **Transformação da Câmera:**
 - Usa `translate(-camera.x, -camera.y)` antes de renderizar o mundo
-- Isso desloca todas as entidades baseado na posição da câmera
+- Isso desloca tile map e entidades baseado na posição da câmera
 - Restaura a transformação antes de renderizar UI (UI fica fixa)
 
 ### EventBus (`engine/EventBus.ts`)
@@ -1135,12 +1298,15 @@ this.game?.eventBus.off('trigger:enter', this.handler);
 - ✅ Sistema de entidades (Entity, Player, Wall, Door)
 - ✅ Sistema de colliders: SOLID (bloqueia movimento) e TRIGGER (detecta sem bloquear)
 - ✅ Sistema de eventos (EventBus) para comunicação entre componentes
+- ✅ Sistema de tile map com camadas visuais e de colisão
+- ✅ Integração de tile map com sistema de física (colisões com tiles)
+- ✅ Renderização de tile map otimizada (apenas tiles visíveis)
 - ✅ Otimização de física: ignora colisões entre objetos estáticos
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Cena de menu principal (MainMenuScene)
-- ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões
+- ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões com tile map
 - ✅ Movimento de player com WASD e normalização de vetor
-- ✅ Colisões entre player e paredes
+- ✅ Colisões entre player e tiles do mapa
 - ✅ Eventos de trigger para mudança de cena
 - ✅ Hot reload em desenvolvimento
 - ✅ Build separado para main e renderer processes

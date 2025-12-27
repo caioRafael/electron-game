@@ -3,6 +3,8 @@ import { Entity } from "../entities/Entity";
 import { CanvasRenderer } from "../rendering/CanvasRenderer";
 import { UIElement } from "../ui/UIElement";
 import { Camera } from "../rendering/Camera";
+import { TileMapRenderer } from "../rendering/TileMapRenderer";
+import { TileMap } from "../map/TileMap";
 
 export class RenderSystem implements System {
     // private entities: Entity[] = [];
@@ -11,6 +13,10 @@ export class RenderSystem implements System {
     private backgroundColor: string = '#1e1e1e';
     private camera: Camera;
     private renderer?: CanvasRenderer;
+    private tileMapRenderer?: TileMapRenderer;
+    private tileMap?: TileMap;
+    
+    
     constructor(renderer: CanvasRenderer, camera: Camera) {
         this.renderer = renderer;
         this.camera = camera;
@@ -50,6 +56,18 @@ export class RenderSystem implements System {
      */
     setBackgroundColor(color: string): void {
         this.backgroundColor = color;
+    }
+
+    setTileMap(tileMap: TileMap | undefined): void {
+        this.tileMap = tileMap;
+
+        if(this.renderer && tileMap){
+            this.tileMapRenderer = new TileMapRenderer(
+                this.renderer.getContext()
+            );
+        } else {
+            this.tileMapRenderer = undefined;
+        }
     }
 
     /**
@@ -111,6 +129,10 @@ export class RenderSystem implements System {
         //WOLRD
         this.renderer.save();
         this.renderer.translate(-this.camera.x, -this.camera.y);
+
+        if(this.tileMap && this.tileMapRenderer){
+            this.tileMapRenderer.render(this.tileMap, this.camera);
+        }
 
         // Renderiza todas as entidades na ordem de registro
         for (const entity of this.world) {

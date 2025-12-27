@@ -3,57 +3,32 @@ import { InputSystem } from "../systems/InputSystem";
 import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { RenderSystem } from "../systems/RenderSystem";
 import { Player } from "../entities/Player";
-import { Wall } from "../entities/Wall";
-import { Door } from "../entities/Door";
 import { DebugFPS } from "../ui/DebugFPS";
 import { PlayerStatus } from "../ui/PlayerStatus";
 import { CameraSystem } from "../systems/CameraSystem";
-import { PhysicsBody } from "../physics/PhysicsBody";
-import { MainMenuScene } from "./MainMenuScene";
+import { TileMap } from "../map/TileMap";
+import { createLevel01Map } from "../map/maps/level01";
 
 
 export class Level01Scene extends Scene {
     private player: Player;
-    private wallTop: Wall;
-    private wallBottom: Wall;
-    private wallLeft: Wall;
-    // private wallRight: Wall;
-    private door: Door;
     private debugFPS: DebugFPS;
     private playerStatus: PlayerStatus;
-    private triggerEnterHandler?: (event: {trigger: PhysicsBody, other: PhysicsBody}) => void;
+    private tileMap?: TileMap;
 
     constructor(){
         super();
-        // Parâmetros da caixa
-        const boxLeft = 100;
-        const boxTop = 100;
-        const boxWidth = 600;
-        const boxHeight = 400;
-        const wallThickness = 20;
-
-        // Centro do box (usando center do player)
+        
+        // Cria o tile map
+        this.tileMap = createLevel01Map();
+        
+        // Posiciona o player no centro do mapa
         const playerSize = 50; // default do Player conforme Player.ts
-        // Coloque o player no centro da caixa
-        const playerX = boxLeft + (boxWidth - playerSize) / 2;
-        const playerY = boxTop + (boxHeight - playerSize) / 2;
+        const mapWidth = this.tileMap.width * this.tileMap.tileSize;
+        const mapHeight = this.tileMap.height * this.tileMap.tileSize;
+        const playerX = (mapWidth - playerSize) / 2;
+        const playerY = (mapHeight - playerSize) / 2;
         this.player = new Player(playerX, playerY);
-
-        // Parede superior
-        this.wallTop = new Wall(boxLeft, boxTop, boxWidth, wallThickness);
-        // Parede inferior
-        this.wallBottom = new Wall(boxLeft, boxTop + boxHeight - wallThickness, boxWidth, wallThickness);
-        // Parede esquerda
-        this.wallLeft = new Wall(boxLeft, boxTop + wallThickness, wallThickness, boxHeight - 2 * wallThickness);
-        // Parede direita
-        // this.wallRight = new Wall(boxLeft + boxWidth - wallThickness, boxTop + wallThickness, wallThickness, boxHeight - 2 * wallThickness);
-
-        // Porta na parede direita (centro vertical)
-        const doorWidth = 80;
-        const doorHeight = 100;
-        const doorX = boxLeft + boxWidth - wallThickness;
-        const doorY = boxTop + (boxHeight - doorHeight) / 2;
-        this.door = new Door(doorX, doorY, wallThickness, doorHeight);
 
         this.debugFPS = new DebugFPS();
         this.playerStatus = new PlayerStatus(this.player);
@@ -72,45 +47,24 @@ export class Level01Scene extends Scene {
         const physicsSystem = this.game?.getSystems(PhysicsSystem);
         if (physicsSystem) {
             physicsSystem.registerEntity(this.player);
-            physicsSystem.registerEntity(this.wallTop);
-            physicsSystem.registerEntity(this.wallBottom);
-            physicsSystem.registerEntity(this.wallLeft);
-            // physicsSystem.registerEntity(this.wallRight);
-            physicsSystem.registerEntity(this.door);
+            
+            // Configura o tile map no sistema de física para colisões
+            if (this.tileMap) {
+                physicsSystem.setTileMap(this.tileMap);
+            }
         }
 
         // Registra as entidades no sistema de renderização
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
-            // Registra na ordem: primeiro as que ficam atrás (paredes), depois porta e player
-            renderSystem.registerWorld(this.wallTop);
-            renderSystem.registerWorld(this.wallBottom);
-            renderSystem.registerWorld(this.wallLeft);
-            // renderSystem.registerWorld(this.wallRight);
-            renderSystem.registerWorld(this.door);
             renderSystem.registerWorld(this.player);
             renderSystem.registerUI(this.debugFPS);
             renderSystem.registerUI(this.playerStatus);
-        }
-
-        this.triggerEnterHandler = (event) => this.onTriggerEnter(event);
-        this.game?.eventBus.on('trigger:enter', this.triggerEnterHandler);
-        // this.game?.eventBus.on('collision', this.onCollision);
-    }
-
-    private onTriggerEnter(event: {trigger: PhysicsBody, other: PhysicsBody}): void {
-        console.log('Trigger entered:', event);
-        if(event.trigger instanceof Door && event.other instanceof Player) {
-            console.log('Player colidiu com a porta teste na cena');
-            this.game?.setScene(new MainMenuScene());
-        }
-    }
-
-    private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
-        console.log('Collision:', event);
-        if(event.entityA instanceof Player && event.entityB instanceof Wall) {
-            console.log('Player colidiu com a parede teste na cena');
-            // this.game?.setScene(new MainMenuScene());
+            
+            // Configura o tile map no sistema de renderização
+            if (this.tileMap) {
+                renderSystem.setTileMap(this.tileMap);
+            }
         }
     }
 
@@ -124,30 +78,15 @@ export class Level01Scene extends Scene {
         const physicsSystem = this.game?.getSystems(PhysicsSystem);
         if (physicsSystem) {
             physicsSystem.unregisterEntity(this.player);
-            physicsSystem.unregisterEntity(this.wallTop);
-            physicsSystem.unregisterEntity(this.wallBottom);
-            physicsSystem.unregisterEntity(this.wallLeft);
-            // physicsSystem.unregisterEntity(this.wallRight);
-            physicsSystem.unregisterEntity(this.door);
         }
 
         // Remove as entidades do sistema de renderização
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
             renderSystem.unregisterWorld(this.player);
-            renderSystem.unregisterWorld(this.wallTop);
-            renderSystem.unregisterWorld(this.wallBottom);
-            renderSystem.unregisterWorld(this.wallLeft);
-            // renderSystem.unregisterWorld(this.wallRight);
-            renderSystem.unregisterWorld(this.door);
             renderSystem.unregisterUI(this.debugFPS);
             renderSystem.unregisterUI(this.playerStatus);
         }
-
-        if (this.triggerEnterHandler) {
-            this.game?.eventBus.off('trigger:enter', this.triggerEnterHandler);
-        }
-        // this.game?.eventBus.off('collision', this.onCollision);
     }
 
     /**
@@ -163,13 +102,6 @@ export class Level01Scene extends Scene {
         // Atualiza o input do player e então atualiza o player
         this.player.actions = actions;
         this.player.update(delta);
-        
-        // Atualiza as paredes (caso precise no futuro)
-        this.wallTop.update(delta);
-        this.wallBottom.update(delta);
-        this.wallLeft.update(delta);
-        // this.wallRight.update(delta);
-        this.door.update(delta);
 
         // Atualiza elementos de UI
         this.debugFPS.update(delta);
@@ -188,10 +120,6 @@ export class Level01Scene extends Scene {
             const renderer = this.getRenderer();
             if (!renderer) return;
             renderer.clear('#1e1e1e');
-            this.wallTop.render();
-            this.wallBottom.render();
-            this.wallLeft.render();
-            // this.wallRight.render();
             this.player.render();
             this.debugFPS.render();
             this.playerStatus.render();

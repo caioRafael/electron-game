@@ -13,6 +13,10 @@ export class CanvasRenderer {
         return this.canvas;
     }
 
+    getContext(): CanvasRenderingContext2D {
+        return this.ctx;
+    }
+
     clear(color?: string): void {
         if (color) {
             this.ctx.fillStyle = color;
