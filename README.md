@@ -28,6 +28,7 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de game state**: Separação entre estado do jogo (MENU, PLAYING, PAUSED) e estado da cena
 - **Sistema de entidades**: Arquitetura baseada em entidades com componentes
 - **Renderização Canvas**: Renderização 2D usando Canvas API
+- **Modo Debug**: Sistema de visualização de debug com bounding boxes, grid de tiles e colisões
 - **Hot Reload**: Recarregamento automático durante o desenvolvimento
 
 ## 🛠 Tecnologias
@@ -202,6 +203,8 @@ Classe central que coordena todos os componentes:
 - `showMenu()`: Transiciona para MENU
 - `pause()`: Pausa o jogo (PLAYING → PAUSED)
 - `resume()`: Retoma o jogo (PAUSED → PLAYING)
+- `isDebugMode()`: Verifica se o modo debug está ativo
+- `setDebugMode(enabled)`: Ativa ou desativa o modo debug
 
 #### 3. **Sistema de Cenas (`Scene.ts`)**
 
@@ -629,6 +632,7 @@ cameraSystem?.follow(this.player); // Câmera segue o player
 - Elementos de UI não são afetados pela câmera (sempre fixos na tela)
 - Gerencia cor de fundo do canvas
 - Injeta referência do RenderSystem em entidades e elementos de UI automaticamente
+- **Modo Debug**: Renderiza informações de debug quando `game.isDebugMode()` retorna `true`
 
 **Métodos principais:**
 - `registerWorld(entity)`: Registra entidade para renderização (injeta RenderSystem)
@@ -645,6 +649,18 @@ cameraSystem?.follow(this.player); // Câmera segue o player
 - O mundo é renderizado com `translate(-camera.x, -camera.y)`
 - Isso faz com que entidades sejam deslocadas baseadas na posição da câmera
 - Elementos de UI são renderizados após restaurar a transformação (fixos na tela)
+
+**Modo Debug:**
+- Quando `game.isDebugMode()` retorna `true`, o RenderSystem renderiza informações de debug:
+  - **Grid do tile map**: Linhas cinzas mostrando a grade de tiles
+  - **Tiles de colisão**: 
+    - Tiles SOLID aparecem em vermelho semi-transparente
+    - Tiles TRIGGER aparecem em amarelo semi-transparente
+  - **Bounding boxes das entidades**:
+    - Entidades SOLID: borda verde sólida
+    - Entidades TRIGGER: borda amarela tracejada
+    - Entidades sem collider: borda cinza tracejada
+  - **Colisões ativas**: Linhas magenta conectando entidades em colisão, com círculos nos centros
 
 #### 10. **Canvas Renderer (`CanvasRenderer.ts`)**
 
@@ -1045,6 +1061,65 @@ const renderSystem = this.game?.getSystems(RenderSystem);
 renderSystem?.registerUI(uiElement); // Injeta RenderSystem automaticamente
 ```
 
+### Usando o Modo Debug
+
+O modo debug permite visualizar informações úteis durante o desenvolvimento, como bounding boxes, grid de tiles e colisões ativas.
+
+**Ativando o modo debug:**
+
+```typescript
+// Em uma cena ou no app.ts
+onEnter(): void {
+    // Ativa o modo debug
+    this.game?.setDebugMode(true);
+}
+
+// Ou desativa quando necessário
+onExit(): void {
+    this.game?.setDebugMode(false);
+}
+```
+
+**O que é renderizado quando o debug mode está ativo:**
+
+1. **Grid do tile map**: Linhas cinzas mostrando a grade de tiles
+2. **Tiles de colisão**:
+   - Tiles SOLID: área vermelha semi-transparente com borda vermelha
+   - Tiles TRIGGER: área amarela semi-transparente com borda amarela tracejada
+3. **Bounding boxes das entidades**:
+   - Entidades SOLID: borda verde sólida (2px)
+   - Entidades TRIGGER: borda amarela tracejada (2px)
+   - Entidades sem collider: borda cinza tracejada (1px)
+4. **Colisões ativas**: Linhas magenta conectando entidades que estão colidindo, com círculos nos centros
+
+**Exemplo de uso em uma cena:**
+
+```typescript
+export class MyScene extends Scene {
+    onEnter(): void {
+        // Ativa debug mode para desenvolvimento
+        this.game?.setDebugMode(true);
+        
+        // ... resto da inicialização
+    }
+    
+    update(delta: number): void {
+        // Pode verificar se está em debug mode
+        if (this.game?.isDebugMode()) {
+            // Lógica adicional apenas em debug
+            console.log('Debug mode ativo');
+        }
+    }
+    
+    onExit(): void {
+        // Opcional: desativa debug ao sair da cena
+        // this.game?.setDebugMode(false);
+    }
+}
+```
+
+**Nota:** Por padrão, o modo debug está desativado (`false`). Ative-o durante o desenvolvimento para visualizar informações de debug e desative-o em produção.
+
 ### Acessando Sistemas de uma Cena
 
 ```typescript
@@ -1080,6 +1155,12 @@ renderSystem?.setBackgroundColor('#000000');
 renderSystem?.registerWorld(myEntity); // Registra entidade (injeta RenderSystem)
 renderSystem?.registerUI(myUIElement); // Registra elemento de UI (injeta RenderSystem)
 renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com câmera aplicada)
+
+// Debug Mode
+this.game?.setDebugMode(true); // Ativa modo debug
+if (this.game?.isDebugMode()) {
+    // Modo debug está ativo - RenderSystem renderizará informações de debug automaticamente
+}
 ```
 
 ## 📚 Componentes Principais
@@ -1115,12 +1196,24 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - `stop()`: Finaliza o jogo
 - `getSystems<T>(type)`: Obtém um sistema específico
 - `addSystem(system)`: Adiciona um sistema ao jogo (define automaticamente `system.game = this`)
+- `isDebugMode()`: Verifica se o modo debug está ativo
+- `setDebugMode(enabled)`: Ativa ou desativa o modo debug
 
 **Comportamento do Loop:**
 - Sempre renderiza a cena (mesmo quando pausado)
 - Sempre atualiza a cena (para processar inputs como ESC)
 - InputSystem sempre atualiza (para processar inputs mesmo quando pausado)
 - Outros sistemas atualizam apenas quando `PLAYING` (física pausa quando `PAUSED`)
+
+**Modo Debug:**
+- Por padrão, o modo debug está desativado (`debugMode = false`)
+- Quando ativado, o RenderSystem renderiza informações visuais de debug:
+  - Grid do tile map
+  - Bounding boxes de todas as entidades
+  - Tiles de colisão (SOLID e TRIGGER)
+  - Colisões ativas entre entidades
+- O PhysicsSystem armazena colisões ativas quando o debug mode está ativo
+- Use `game.setDebugMode(true)` para ativar durante o desenvolvimento
 
 ### Loop (`engine/Loop.ts`)
 
@@ -1148,6 +1241,25 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - `save()` / `restore()`: Salva/restaura estado do contexto
 - `setTextAlign(align)`: Define alinhamento do texto
 - `getCanvas()`: Retorna o elemento HTMLCanvasElement
+- `getContext()`: Retorna o contexto do canvas (usado pelo DebugRenderer)
+
+### DebugRenderer (`rendering/DebugRenderer.ts`)
+
+**Responsabilidades:**
+- Renderizar informações visuais de debug
+- Visualizar bounding boxes, grid e colisões
+- Usado internamente pelo RenderSystem quando o modo debug está ativo
+
+**Métodos principais:**
+- `renderBoundingBoxes(entities, camera)`: Renderiza bounding boxes coloridas das entidades
+  - Verde sólido para entidades SOLID
+  - Amarelo tracejado para entidades TRIGGER
+  - Cinza tracejado para entidades sem collider
+- `renderGrid(tileMap, camera)`: Renderiza grid do tile map (linhas cinzas)
+- `renderTileCollisions(tileMap, camera)`: Renderiza tiles de colisão
+  - Vermelho semi-transparente para tiles SOLID
+  - Amarelo semi-transparente para tiles TRIGGER
+- `renderActiveCollisions(entities, collisions, camera)`: Renderiza linhas magenta conectando entidades em colisão
 
 ### InputSystem (`systems/InputSystem.ts`)
 
@@ -1202,12 +1314,15 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - Verificar colisões entre entidades e tiles sólidos do tile map
 - Detectar triggers do tile map
 - **Pausa automaticamente quando o jogo não está em PLAYING**
+- **Armazena colisões ativas para debug quando `game.isDebugMode()` está ativo**
 
 **Métodos:**
 - `registerEntity(entity)`: Registra entidade para processamento de física
 - `unregisterEntity(entity)`: Remove entidade do sistema
 - `clearEntities()`: Limpa todas as entidades registradas
 - `setTileMap(tileMap)`: Define o tile map para verificação de colisões
+- `getEntities()`: Retorna todas as entidades registradas (útil para debug)
+- `getActiveCollisions()`: Retorna colisões ativas do frame atual (apenas quando debug mode está ativo)
 
 **Como funciona:**
 - Usa detecção AABB (Axis-Aligned Bounding Box)
@@ -1384,6 +1499,7 @@ this.game?.eventBus.off('trigger:enter', this.handler);
 - ✅ Renderização de tile map otimizada (apenas tiles visíveis)
 - ✅ Otimização de física: ignora colisões entre objetos estáticos
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
+- ✅ Modo Debug com visualização de bounding boxes, grid e colisões
 - ✅ Cena de menu principal (MainMenuScene)
 - ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões com tile map
 - ✅ Movimento de player com WASD e normalização de vetor

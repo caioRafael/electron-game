@@ -10,6 +10,7 @@ export class PhysicsSystem implements System {
     game?: Game;
     private entities: (Entity & Partial<PhysicsBody>)[] = [];
     private tileMap?: TileMap;
+    private activeCollisions: Array<{ entityA: Entity & Partial<PhysicsBody>, entityB: Entity & Partial<PhysicsBody> }> = [];
     
 
     onInit(): void {
@@ -72,6 +73,9 @@ export class PhysicsSystem implements System {
      * Verifica colisões entre todas as entidades registradas
      */
     private checkCollisions(): void {
+        // Limpa colisões ativas do frame anterior
+        this.activeCollisions = [];
+
         for (let i = 0; i < this.entities.length; i++) {
             const entityA = this.entities[i];
             
@@ -87,6 +91,11 @@ export class PhysicsSystem implements System {
                 const aIsStatic = entityA.vx === undefined && entityA.vy === undefined;
                 const bIsStatic = entityB.vx === undefined && entityB.vy === undefined;
                 const bothStatic = aIsStatic && bIsStatic;
+
+                // Armazena colisão ativa para debug
+                if (this.game?.isDebugMode()) {
+                    this.activeCollisions.push({ entityA, entityB });
+                }
 
                 //BLOQUEIA - apenas resolve colisão se pelo menos um objeto está em movimento
                 if(aIsSolid && bIsSolid && !bothStatic) {
@@ -115,6 +124,20 @@ export class PhysicsSystem implements System {
                 }
             }
         }
+    }
+
+    /**
+     * Obtém colisões ativas no frame atual (para debug)
+     */
+    getActiveCollisions(): Array<{ entityA: Entity & Partial<PhysicsBody>, entityB: Entity & Partial<PhysicsBody> }> {
+        return this.activeCollisions;
+    }
+
+    /**
+     * Obtém todas as entidades registradas (para debug)
+     */
+    getEntities(): (Entity & Partial<PhysicsBody>)[] {
+        return this.entities;
     }
 
     /**

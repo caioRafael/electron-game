@@ -5,6 +5,10 @@ import { UIElement } from "../ui/UIElement";
 import { Camera } from "../rendering/Camera";
 import { TileMapRenderer } from "../rendering/TileMapRenderer";
 import { TileMap } from "../map/TileMap";
+import { DebugRenderer } from "../rendering/DebugRenderer";
+import { Game } from "../engine/Game";
+import { PhysicsSystem } from "./PhysicsSystem";
+import { PhysicsBody } from "../physics/PhysicsBody";
 
 export class RenderSystem implements System {
     // private entities: Entity[] = [];
@@ -15,11 +19,16 @@ export class RenderSystem implements System {
     private renderer?: CanvasRenderer;
     private tileMapRenderer?: TileMapRenderer;
     private tileMap?: TileMap;
+    private debugRenderer?: DebugRenderer;
+    game?: Game;
     
     
     constructor(renderer: CanvasRenderer, camera: Camera) {
         this.renderer = renderer;
         this.camera = camera;
+        if (renderer) {
+            this.debugRenderer = new DebugRenderer(renderer.getContext());
+        }
     }
 
     /**
@@ -139,12 +148,41 @@ export class RenderSystem implements System {
             entity.render();
         }
         
+        // Renderização de debug (apenas se debug mode estiver ativo)
+        if (this.game?.isDebugMode() && this.debugRenderer) {
+            this.renderDebug();
+        }
+        
         this.renderer.restore();
 
         //UI
         for (const element of this.ui) {
             element.render();
         }
+    }
+
+    /**
+     * Renderiza informações de debug
+     */
+    private renderDebug(): void {
+        if (!this.debugRenderer) return;
+
+        const physicsSystem = this.game?.getSystems(PhysicsSystem);
+        if (!physicsSystem) return;
+
+        // Renderiza grid do tile map
+        if (this.tileMap) {
+            this.debugRenderer.renderGrid(this.tileMap, this.camera);
+            this.debugRenderer.renderTileCollisions(this.tileMap, this.camera);
+        }
+
+        // Renderiza bounding boxes das entidades com física
+        const physicsEntities = physicsSystem.getEntities();
+        this.debugRenderer.renderBoundingBoxes(physicsEntities, this.camera);
+
+        // Renderiza colisões ativas
+        const activeCollisions = physicsSystem.getActiveCollisions();
+        this.debugRenderer.renderActiveCollisions(physicsEntities, activeCollisions, this.camera);
     }
 
     /**

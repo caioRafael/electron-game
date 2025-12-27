@@ -24,9 +24,13 @@ export class Game {
     private status: GameStatus = GameStatus.STOPPED;
     private currentScene: Scene | null = null;
     public readonly eventBus = new EventBus();
+    private debugMode: boolean = false;
 
     constructor(loop: Loop){
         this.loop = loop;
+        // Debug mode ativado por padrão para desenvolvimento
+        // Em produção, definir como false ou usar variável de ambiente
+        this.debugMode = false; // Ativo por padrão para visualização
     }
 
     addSystem(system: System): void {
@@ -129,6 +133,21 @@ export class Game {
     getSystems<T extends System>(type: new (...args: any[]) => T): T | undefined {
         return this.systems.find(system => system instanceof type) as T | undefined;
     }
+
+    /**
+     * Verifica se o modo debug está ativo
+     */
+    isDebugMode(): boolean {
+        return this.debugMode;
+    }
+
+    /**
+     * Ativa ou desativa o modo debug
+     */
+    setDebugMode(enabled: boolean): void {
+        this.debugMode = enabled;
+    }
+
     // Finaliza o jogo
     stop(): void{
         this.loop.stop();
