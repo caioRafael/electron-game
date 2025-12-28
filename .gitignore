@@ -3,4 +3,14 @@ dist/
 *.log
 .env
 .DS_Store
-
+src/assets/**/*.mp3
+src/assets/**/*.wav
+src/assets/**/*.ogg
+src/assets/**/*.flac
+src/assets/**/*.aac
+src/assets/**/*.m4a
+src/assets/**/*.m4b
+src/assets/**/*.m4p
+src/assets/**/*.m4v
+src/assets/**/*.m4a
+src/assets/**/*.m4b

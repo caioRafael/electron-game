@@ -7,6 +7,7 @@ import { PhysicsSystem } from "./systems/PhysicsSystem";
 import { RenderSystem } from "./systems/RenderSystem";
 import { Camera } from "./rendering/Camera";
 import { CameraSystem } from "./systems/CameraSystem";
+import { AudioSystem } from "./systems/AudioSystem";
 
 export class App {
     private game: Game;
@@ -27,6 +28,7 @@ export class App {
         this.game.addSystem(new InputSystem());
         this.cameraSystem = new CameraSystem(camera);
         this.game.addSystem(this.cameraSystem);
+        this.game.addSystem(new AudioSystem());
         this.game.addSystem(new PhysicsSystem());
         
         // Cria e configura o RenderSystem com o renderer

@@ -27,6 +27,7 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de câmera**: Câmera que segue entidades e aplica transformações de visualização
 - **Sistema de game state**: Separação entre estado do jogo (MENU, PLAYING, PAUSED) e estado da cena
 - **Sistema de entidades**: Arquitetura baseada em entidades com componentes
+- **Sistema de áudio**: Música de fundo e efeitos sonoros com controle de volume separado
 - **Renderização Canvas**: Renderização 2D usando Canvas API
 - **Hot Reload**: Recarregamento automático durante o desenvolvimento
 
@@ -62,12 +63,15 @@ game/
 │       │   ├── InputSystem.ts   # Sistema de input (teclado e mouse)
 │       │   ├── PhysicsSystem.ts # Sistema de física e colisões
 │       │   ├── RenderSystem.ts  # Sistema de renderização
-│       │   └── CameraSystem.ts  # Sistema de câmera
+│       │   ├── CameraSystem.ts  # Sistema de câmera
+│       │   └── AudioSystem.ts   # Sistema de áudio (música e SFX)
 │       │
 │       ├── entities/             # Entidades do jogo
 │       │   ├── Entity.ts        # Classe base abstrata para entidades
 │       │   ├── Player.ts        # Entidade do jogador
-│       │   └── Wall.ts          # Entidade de parede
+│       │   ├── Wall.ts          # Entidade de parede
+│       │   ├── Door.ts          # Entidade de porta/trigger
+│       │   └── Food.ts          # Entidade de comida coletável
 │       │
 │       ├── physics/              # Sistema de física
 │       │   ├── PhysicsBody.ts   # Classe abstrata para corpos físicos
@@ -93,12 +97,16 @@ game/
 │       │   ├── UIElement.ts     # Classe base abstrata para elementos de UI
 │       │   ├── DebugFPS.ts      # Elemento de UI para exibir FPS
 │       │   ├── PlayerStatus.ts  # Elemento de UI para status do player
-│       │   └── PauseMenu.ts     # Menu de pausa do jogo
+│       │   ├── PauseMenu.ts     # Menu de pausa do jogo
+│       │   └── ScoreUI.ts       # Elemento de UI para exibir pontuação
 │       │
 │       └── scenes/               # Cenas do jogo
 │           ├── MainMenuScene.ts # Cena do menu principal
 │           └── Level01Scene.ts  # Cena de gameplay nível 01
 │
+├── assets/                       # Assets do jogo (músicas e sons)
+│   ├── musics/                  # Arquivos de música de fundo
+│   └── sounds/                  # Arquivos de efeitos sonoros
 ├── dist/                         # Código compilado (gerado)
 ├── package.json
 ├── tsconfig.json                 # Configuração TypeScript principal
@@ -262,6 +270,7 @@ Interface para componentes modulares:
 - `PhysicsSystem`: Detecta e resolve colisões entre entidades
 - `RenderSystem`: Gerencia renderização centralizada de entidades
 - `CameraSystem`: Gerencia posição e movimento da câmera
+- `AudioSystem`: Gerencia música de fundo e efeitos sonoros
 
 **Acesso ao Game:**
 Sistemas podem acessar o Game através de `this.game` após serem adicionados:
@@ -646,7 +655,7 @@ cameraSystem?.follow(this.player); // Câmera segue o player
 - Isso faz com que entidades sejam deslocadas baseadas na posição da câmera
 - Elementos de UI são renderizados após restaurar a transformação (fixos na tela)
 
-#### 10. **Canvas Renderer (`CanvasRenderer.ts`)**
+#### 12. **Canvas Renderer (`CanvasRenderer.ts`)**
 
 Abstração sobre Canvas API para renderização 2D:
 
@@ -1080,6 +1089,19 @@ renderSystem?.setBackgroundColor('#000000');
 renderSystem?.registerWorld(myEntity); // Registra entidade (injeta RenderSystem)
 renderSystem?.registerUI(myUIElement); // Registra elemento de UI (injeta RenderSystem)
 renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com câmera aplicada)
+
+// Audio System
+const audioSystem = this.game?.getSystems(AudioSystem);
+await audioSystem?.loadMusic('tema', './assets/musics/tema.mp3'); // Carrega música
+audioSystem?.playMusic('tema'); // Toca música em loop
+await audioSystem?.load('sfx', './assets/sounds/sfx.ogg'); // Carrega SFX
+audioSystem?.playSFX('sfx'); // Toca efeito sonoro
+audioSystem?.pauseMusic(); // Pausa música
+audioSystem?.resumeMusic(); // Retoma música
+audioSystem?.stopMusic(); // Para música
+audioSystem?.setMasterVolume(0.8); // Volume geral
+audioSystem?.setMusicVolume(0.5); // Volume da música
+audioSystem?.setSFXVolume(1.0); // Volume dos SFX
 ```
 
 ## 📚 Componentes Principais
@@ -1250,6 +1272,51 @@ renderSystem?.render(); // Renderiza todas as entidades e elementos de UI (com c
 - `x`, `y`: Posição da câmera no mundo
 - `width`, `height`: Tamanho da viewport (geralmente igual ao tamanho do canvas)
 
+### AudioSystem (`systems/AudioSystem.ts`)
+
+**Responsabilidades:**
+- Gerenciar música de fundo e efeitos sonoros (SFX)
+- Carregar arquivos de áudio de forma assíncrona
+- Controlar volumes separados para música e SFX
+- Suportar pausar e retomar música de fundo
+
+**Métodos principais:**
+- `load(name, url)`: Carrega um arquivo de áudio de forma assíncrona
+- `loadMusic(name, url)`: Carrega música de fundo (wrapper de `load`)
+- `playMusic(name)`: Toca música de fundo em loop
+- `playSFX(name)`: Toca um efeito sonoro uma vez
+- `stopMusic()`: Para completamente a música de fundo
+- `pauseMusic()`: Pausa a música de fundo (mantém referência para retomar)
+- `resumeMusic()`: Retoma a música de fundo pausada
+- `setMasterVolume(volume)`: Define volume geral (0.0 a 1.0)
+- `setMusicVolume(volume)`: Define volume da música (0.0 a 1.0)
+- `setSFXVolume(volume)`: Define volume dos SFX (0.0 a 1.0)
+
+**Como funciona:**
+- Usa Web Audio API (`AudioContext`) para reprodução
+- Mantém buffers de áudio em memória após carregamento
+- Música de fundo toca em loop automaticamente
+- SFX são tocados uma vez e não podem ser pausados individualmente
+- Arquivos devem estar em `src/assets/` e são copiados para `dist/renderer/assets/` durante o build
+
+**Uso:**
+```typescript
+const audioSystem = this.game?.getSystems(AudioSystem);
+
+// Carregar e tocar música
+await audioSystem?.loadMusic('tema', './assets/musics/tema.mp3');
+audioSystem?.playMusic('tema');
+
+// Carregar e tocar SFX
+await audioSystem?.load('coletar', './assets/sounds/coletar.ogg');
+audioSystem?.playSFX('coletar');
+
+// Controle de volume
+audioSystem?.setMasterVolume(0.8);
+audioSystem?.setMusicVolume(0.5);
+audioSystem?.setSFXVolume(1.0);
+```
+
 ### RenderSystem (`systems/RenderSystem.ts`)
 
 **Responsabilidades:**
@@ -1384,17 +1451,19 @@ this.game?.eventBus.off('trigger:enter', this.handler);
 - ✅ Renderização de tile map otimizada (apenas tiles visíveis)
 - ✅ Otimização de física: ignora colisões entre objetos estáticos
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
+- ✅ Sistema de áudio com música de fundo e efeitos sonoros
+- ✅ Controle de volume separado para música e SFX
+- ✅ Pausar e retomar música de fundo
 - ✅ Cena de menu principal (MainMenuScene)
 - ✅ Cena de gameplay (Level01Scene) com movimento de player e colisões com tile map
 - ✅ Movimento de player com WASD e normalização de vetor
 - ✅ Colisões entre player e tiles do mapa
 - ✅ Eventos de trigger para mudança de cena
+- ✅ Sistema de coleta de itens (comida) com pontuação
 - ✅ Hot reload em desenvolvimento
 - ✅ Build separado para main e renderer processes
 
 ### 🚧 Em Desenvolvimento / Planejado
-
-- ⏳ Sistema de áudio
 - ⏳ Sistema de assets/sprites
 - ⏳ Mais cenas de jogo
 - ⏳ Sistema de componentes mais robusto

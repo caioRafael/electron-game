@@ -32,7 +32,11 @@ export class Player extends Entity implements PhysicsBody {
     }
 
     update(delta: number): void {
-        if (!this.actions) return;
+        if (!this.actions) {
+            this.vx = 0;
+            this.vy = 0;
+            return;
+        }
     
         let moveX = 0;
         let moveY = 0;
@@ -48,8 +52,13 @@ export class Player extends Entity implements PhysicsBody {
           moveY /= magnitude;
         }
     
-        this.x += moveX * this.speed * delta;
-        this.y += moveY * this.speed * delta;
+        // Atualiza velocidade para o sistema de física detectar movimento
+        this.vx = moveX * this.speed;
+        this.vy = moveY * this.speed;
+    
+        // Atualiza posição baseada na velocidade
+        this.x += this.vx * delta;
+        this.y += this.vy * delta;
       }
 
     render(): void {
