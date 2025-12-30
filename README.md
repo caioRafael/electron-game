@@ -11,6 +11,7 @@ Um motor de jogo 2D desenvolvido com Electron, TypeScript e Canvas API, implemen
 - [Instalação](#instalação)
 - [Uso](#uso)
 - [Desenvolvimento](#desenvolvimento)
+- [Documentação](#documentação)
 - [Componentes Principais](#componentes-principais)
 
 ## 🎯 Visão Geral
@@ -104,9 +105,12 @@ game/
 │           ├── MainMenuScene.ts # Cena do menu principal
 │           └── Level01Scene.ts  # Cena de gameplay nível 01
 │
-├── assets/                       # Assets do jogo (músicas e sons)
+├── assets/                       # Assets do jogo (músicas, sons e imagens)
 │   ├── musics/                  # Arquivos de música de fundo
-│   └── sounds/                  # Arquivos de efeitos sonoros
+│   ├── sounds/                  # Arquivos de efeitos sonoros
+│   └── map/                     # Imagens de tilesets para mapas
+├── docs/                         # Documentação adicional
+│   └── MAPA.md                  # Documentação sobre criação de mapas e texturas
 ├── dist/                         # Código compilado (gerado)
 ├── package.json
 ├── tsconfig.json                 # Configuração TypeScript principal
@@ -474,9 +478,19 @@ private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
 
 **TileLayer (`map/TileLayer.ts`)**:
 - Representa uma camada de tiles
-- Armazena dados como array unidimensional
+- Armazena dados como array bidimensional (`number[][]`)
 - Métodos:
   - `getTile(x, y)`: Obtém o valor do tile na posição (retorna -1 se fora dos limites)
+
+**Tileset (`map/Tileset.ts`)**:
+- Gerencia a imagem de texturas do mapa
+- Divide automaticamente a imagem em tiles individuais
+- Propriedades:
+  - `tileSize`: Tamanho de cada tile em pixels
+  - `tiles`: Map com todos os tiles extraídos da imagem
+- Métodos:
+  - `getTile(id)`: Obtém um tile pelo ID
+  - `getImage()`: Retorna a imagem HTML do tileset
 
 **TileCollisionType (`map/TileTypes.ts`)**:
 - Enum que define tipos de colisão de tiles:
@@ -492,103 +506,12 @@ private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
 **TileMapRenderer (`rendering/TileMapRenderer.ts`)**:
 - Renderiza o tile map na tela
 - Otimização: renderiza apenas tiles visíveis na viewport da câmera
+- Suporta renderização com texturas através do Tileset
 - Métodos:
-  - `render(map, camera)`: Renderiza o mapa aplicando a câmera
+  - `render(map, camera, tileset?)`: Renderiza o mapa aplicando a câmera e texturas
 
-**Criando um Tile Map:**
-
-```typescript
-import { TileLayer } from "../map/TileLayer";
-import { TileMap } from "../map/TileMap";
-import { TileCollisionType } from "../map/TileTypes";
-
-export function createMyMap(): TileMap {
-    const tileSize = 32;
-    const width = 20;
-    const height = 15;
-
-    // Camada visual: dados dos tiles visuais
-    const visualData: number[] = [];
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            // Define o tipo visual do tile (ex: 0=vazio, 1=grama, 2=terra)
-            if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
-                visualData.push(2); // Terra nas bordas
-            } else {
-                visualData.push(1); // Grama no centro
-            }
-        }
-    }
-    const visualLayer = new TileLayer(width, height, visualData);
-
-    // Camada de colisão: dados de colisão dos tiles
-    const collisionData: number[] = [];
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            // Bordas são sólidas
-            if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
-                collisionData.push(TileCollisionType.SOLID);
-            } else {
-                collisionData.push(TileCollisionType.NONE);
-            }
-        }
-    }
-    // Adiciona um trigger em uma posição específica
-    const triggerX = width - 2;
-    const triggerY = Math.floor(height / 2);
-    collisionData[triggerY * width + triggerX] = TileCollisionType.TRIGGER;
-    
-    const collisionLayer = new TileLayer(width, height, collisionData);
-
-    return new TileMap({
-        tileSize,
-        width,
-        height,
-        visualLayer,
-        collisionLayer,
-    });
-}
-```
-
-**Usando Tile Map em uma Cena:**
-
-```typescript
-import { TileMap } from "../map/TileMap";
-import { createMyMap } from "../map/maps/myMap";
-
-export class MyScene extends Scene {
-    private tileMap?: TileMap;
-
-    constructor() {
-        super();
-        this.tileMap = createMyMap();
-    }
-
-    onEnter(): void {
-        const renderSystem = this.game?.getSystems(RenderSystem);
-        const physicsSystem = this.game?.getSystems(PhysicsSystem);
-
-        // Configura o tile map no sistema de renderização
-        if (renderSystem && this.tileMap) {
-            renderSystem.setTileMap(this.tileMap);
-        }
-
-        // Configura o tile map no sistema de física para colisões
-        if (physicsSystem && this.tileMap) {
-            physicsSystem.setTileMap(this.tileMap);
-        }
-    }
-
-    onExit(): void {
-        // Remove o tile map dos sistemas
-        const renderSystem = this.game?.getSystems(RenderSystem);
-        const physicsSystem = this.game?.getSystems(PhysicsSystem);
-
-        renderSystem?.setTileMap(undefined);
-        physicsSystem?.setTileMap(undefined);
-    }
-}
-```
+**📖 Documentação Completa:**
+Para informações detalhadas sobre como criar mapas e aplicar texturas, consulte a [Documentação de Mapas](./docs/MAPA.md).
 
 **Integração com Física:**
 - O PhysicsSystem verifica automaticamente colisões entre entidades e tiles sólidos
@@ -600,6 +523,7 @@ export class MyScene extends Scene {
 - O RenderSystem renderiza o tile map antes das entidades
 - A transformação da câmera é aplicada automaticamente
 - Apenas tiles visíveis na viewport são renderizados (otimização)
+- Texturas são aplicadas através do Tileset configurado no RenderSystem
 
 #### 9. **Sistema de Câmera**
 
@@ -731,6 +655,17 @@ npm start
 - `npm run watch:html` - Monitora e copia HTML automaticamente
 - `npm start` - Build e executa em produção
 - `npm run dev` - Modo desenvolvimento com hot reload
+
+## 📚 Documentação
+
+Documentação adicional está disponível na pasta `docs/`:
+
+- **[Documentação de Mapas](./docs/MAPA.md)**: Guia completo sobre como criar mapas e aplicar texturas
+  - Como criar um novo mapa
+  - Como preparar e aplicar texturas (Tileset)
+  - Estrutura de camadas (visual e colisão)
+  - Mapeamento de IDs de tiles
+  - Exemplos práticos e troubleshooting
 
 ## 🔧 Desenvolvimento
 
@@ -1447,8 +1382,10 @@ this.game?.eventBus.off('trigger:enter', this.handler);
 - ✅ Sistema de colliders: SOLID (bloqueia movimento) e TRIGGER (detecta sem bloquear)
 - ✅ Sistema de eventos (EventBus) para comunicação entre componentes
 - ✅ Sistema de tile map com camadas visuais e de colisão
+- ✅ Sistema de Tileset para aplicação de texturas nos mapas
 - ✅ Integração de tile map com sistema de física (colisões com tiles)
 - ✅ Renderização de tile map otimizada (apenas tiles visíveis)
+- ✅ Renderização de tile map com texturas através do Tileset
 - ✅ Otimização de física: ignora colisões entre objetos estáticos
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Sistema de áudio com música de fundo e efeitos sonoros
