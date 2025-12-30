@@ -25,6 +25,7 @@ Este projeto implementa um motor de jogo 2D com as seguintes características:
 - **Sistema de física**: Detecção e resolução de colisões entre entidades e tiles
 - **Sistema de tile map**: Mapas baseados em tiles com camadas visuais e de colisão
 - **Sistema de renderização**: Renderização centralizada de entidades e tile maps
+- **Sistema de sprites e animações**: Sistema completo para sprite sheets e animações frame-based
 - **Sistema de câmera**: Câmera que segue entidades e aplica transformações de visualização
 - **Sistema de game state**: Separação entre estado do jogo (MENU, PLAYING, PAUSED) e estado da cena
 - **Sistema de entidades**: Arquitetura baseada em entidades com componentes
@@ -92,7 +93,11 @@ game/
 │       ├── rendering/            # Renderização
 │       │   ├── CanvasRenderer.ts # Renderizador Canvas 2D
 │       │   ├── Camera.ts         # Classe de câmera
-│       │   └── TileMapRenderer.ts # Renderizador de tile map
+│       │   ├── TileMapRenderer.ts # Renderizador de tile map
+│       │   └── sprites/          # Sistema de sprites e animações
+│       │       ├── SpriteSheet.ts # Gerenciador de sprite sheets
+│       │       ├── Animation.ts   # Classe de animação
+│       │       └── AnimatedSprite.ts # Sprite animado
 │       │
 │       ├── ui/                   # Elementos de interface do usuário
 │       │   ├── UIElement.ts     # Classe base abstrata para elementos de UI
@@ -332,7 +337,7 @@ onExit(): void {
 }
 ```
 
-#### 5. **Sistema de Input**
+#### 6. **Sistema de Input**
 
 **InputSystem (`InputSystem.ts`)**:
 - Registra listeners de teclado e mouse
@@ -372,7 +377,7 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 }
 ```
 
-#### 6. **Sistema de Entidades**
+#### 7. **Sistema de Entidades**
 
 **Entity (`entities/Entity.ts`)**:
 - Classe abstrata base para todas as entidades do jogo
@@ -395,7 +400,7 @@ if (mouse?.wasClicked(0)) { // Botão esquerdo
 - Implementa `Partial<PhysicsBody>` (colliderType: TRIGGER)
 - Não bloqueia movimento, apenas detecta quando entidades passam por ela
 
-#### 7. **Sistema de Física**
+#### 8. **Sistema de Física**
 
 **PhysicsSystem (`systems/PhysicsSystem.ts`)**:
 - Gerencia detecção e resolução de colisões
@@ -465,7 +470,7 @@ private onCollision(event: {entityA: PhysicsBody, entityB: PhysicsBody}): void {
 }
 ```
 
-#### 8. **Sistema de Tile Map**
+#### 9. **Sistema de Tile Map**
 
 **TileMap (`map/TileMap.ts`)**:
 - Representa um mapa baseado em tiles
@@ -525,7 +530,7 @@ Para informações detalhadas sobre como criar mapas e aplicar texturas, consult
 - Apenas tiles visíveis na viewport são renderizados (otimização)
 - Texturas são aplicadas através do Tileset configurado no RenderSystem
 
-#### 9. **Sistema de Câmera**
+#### 10. **Sistema de Câmera**
 
 **CameraSystem (`systems/CameraSystem.ts`)**:
 - Gerencia a posição e movimento da câmera
@@ -553,7 +558,7 @@ const cameraSystem = this.game?.getSystems(CameraSystem);
 cameraSystem?.follow(this.player); // Câmera segue o player
 ```
 
-#### 9. **Sistema de Renderização**
+#### 11. **Sistema de Renderização**
 
 **RenderSystem (`systems/RenderSystem.ts`)**:
 - Centraliza a renderização de entidades e elementos de UI
@@ -579,7 +584,75 @@ cameraSystem?.follow(this.player); // Câmera segue o player
 - Isso faz com que entidades sejam deslocadas baseadas na posição da câmera
 - Elementos de UI são renderizados após restaurar a transformação (fixos na tela)
 
-#### 12. **Canvas Renderer (`CanvasRenderer.ts`)**
+#### 12. **Sistema de Sprites e Animações**
+
+**SpriteSheet (`rendering/sprites/SpriteSheet.ts`)**:
+- Gerencia uma imagem de sprite sheet e divide em frames individuais
+- Carrega a imagem de forma assíncrona
+- Propriedades:
+  - `image`: HTMLImageElement da imagem carregada
+  - `frameWidth`: Largura de cada frame em pixels
+  - `frameHeight`: Altura de cada frame em pixels
+
+**Animation (`rendering/sprites/Animation.ts`)**:
+- Define uma sequência de frames com duração e comportamento de loop
+- Propriedades:
+  - `frames`: Array de coordenadas `{x: number, y: number}` dos frames
+  - `frameDuration`: Duração de cada frame em milissegundos
+  - `loop`: Se a animação deve repetir (padrão: `true`)
+- Métodos:
+  - `update(delta)`: Atualiza o frame atual baseado no tempo decorrido
+  - `get frame()`: Retorna o frame atual
+  - `reset()`: Reseta a animação para o primeiro frame
+
+**AnimatedSprite (`rendering/sprites/AnimatedSprite.ts`)**:
+- Gerencia múltiplas animações e renderiza o frame atual
+- Propriedades:
+  - `sheet`: SpriteSheet usado para renderização
+  - `animations`: Record de animações nomeadas
+- Métodos:
+  - `play(name)`: Troca para uma animação específica
+  - `update(delta)`: Atualiza o frame atual da animação
+  - `draw(ctx, x, y)`: Renderiza o frame atual na tela
+
+**Como funciona:**
+- O sistema usa coordenadas baseadas em índices da grade do sprite sheet
+- Cada frame é identificado por `{x, y}` onde `x` é a coluna e `y` é a linha
+- O delta time vem em segundos do game loop e é convertido para milissegundos internamente
+- A renderização verifica automaticamente se a imagem está carregada antes de desenhar
+
+**Uso:**
+```typescript
+import { SpriteSheet } from "../rendering/sprites/SpriteSheet";
+import { AnimatedSprite } from "../rendering/sprites/AnimatedSprite";
+import { Animation } from "../rendering/sprites/Animation";
+
+// Cria o sprite sheet
+const sheet = new SpriteSheet('./assets/sprites/player.png', 270, 149);
+
+// Cria o sprite animado
+const sprite = new AnimatedSprite(sheet, {
+    idle: new Animation([{x: 0, y: 0}], 500),
+    walk: new Animation([
+        {x: 0, y: 0},
+        {x: 1, y: 0},
+        {x: 2, y: 0},
+    ], 150),
+});
+
+// No update()
+sprite.play('walk');
+sprite.update(delta);
+
+// No render()
+const ctx = renderer.getContext();
+sprite.draw(ctx, x, y);
+```
+
+**📖 Documentação Completa:**
+Para informações detalhadas sobre como usar sprites e animações, consulte a [Documentação de Sprites e Animações](./docs/SPRITES_E_ANIMACOES.md).
+
+#### 13. **Canvas Renderer (`CanvasRenderer.ts`)**
 
 Abstração sobre Canvas API para renderização 2D:
 
@@ -666,6 +739,13 @@ Documentação adicional está disponível na pasta `docs/`:
   - Estrutura de camadas (visual e colisão)
   - Mapeamento de IDs de tiles
   - Exemplos práticos e troubleshooting
+
+- **[Documentação de Sprites e Animações](./docs/SPRITES_E_ANIMACOES.md)**: Guia completo sobre o sistema de sprites e animações
+  - Como preparar sprite sheets
+  - Como criar e usar animações
+  - Sistema de coordenadas de frames
+  - Integração com entidades
+  - Boas práticas e troubleshooting
 
 ## 🔧 Desenvolvimento
 
@@ -1386,6 +1466,9 @@ this.game?.eventBus.off('trigger:enter', this.handler);
 - ✅ Integração de tile map com sistema de física (colisões com tiles)
 - ✅ Renderização de tile map otimizada (apenas tiles visíveis)
 - ✅ Renderização de tile map com texturas através do Tileset
+- ✅ Sistema de sprites e animações (SpriteSheet, Animation, AnimatedSprite)
+- ✅ Suporte a sprite sheets com transparência (canal alpha)
+- ✅ Animações frame-based com controle de duração e loop
 - ✅ Otimização de física: ignora colisões entre objetos estáticos
 - ✅ Renderização Canvas 2D básica (texto e retângulos)
 - ✅ Sistema de áudio com música de fundo e efeitos sonoros
