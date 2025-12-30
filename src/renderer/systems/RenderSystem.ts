@@ -5,6 +5,7 @@ import { UIElement } from "../ui/UIElement";
 import { Camera } from "../rendering/Camera";
 import { TileMapRenderer } from "../rendering/TileMapRenderer";
 import { TileMap } from "../map/TileMap";
+import { Tileset } from "../map/Tileset";
 
 export class RenderSystem implements System {
     // private entities: Entity[] = [];
@@ -15,6 +16,7 @@ export class RenderSystem implements System {
     private renderer?: CanvasRenderer;
     private tileMapRenderer?: TileMapRenderer;
     private tileMap?: TileMap;
+    private tileset?: Tileset;
     
     
     constructor(renderer: CanvasRenderer, camera: Camera) {
@@ -68,6 +70,10 @@ export class RenderSystem implements System {
         } else {
             this.tileMapRenderer = undefined;
         }
+    }
+
+    setTileset(tileset: Tileset | undefined): void {
+        this.tileset = tileset;
     }
 
     /**
@@ -131,7 +137,7 @@ export class RenderSystem implements System {
         this.renderer.translate(-this.camera.x, -this.camera.y);
 
         if(this.tileMap && this.tileMapRenderer){
-            this.tileMapRenderer.render(this.tileMap, this.camera);
+            this.tileMapRenderer.render(this.tileMap, this.camera, this.tileset);
         }
 
         // Renderiza todas as entidades na ordem de registro

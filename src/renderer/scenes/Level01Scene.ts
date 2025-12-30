@@ -10,9 +10,10 @@ import { TileMap } from "../map/TileMap";
 import { createLevel01Map } from "../map/maps/level01";
 import { PauseMenu } from "../ui/PauseMenu";
 import { AudioSystem } from "../systems/AudioSystem";
-import { Food } from "../entities/Food";
+// import { Food } from "../entities/Food";
 import { ScoreUI } from "../ui/ScoreUI";
 import { PhysicsBody } from "../physics/PhysicsBody";
+import { Tileset } from "../map/Tileset";
 
 
 export class Level01Scene extends Scene {
@@ -21,8 +22,9 @@ export class Level01Scene extends Scene {
     private playerStatus: PlayerStatus;
     private pauseMenu: PauseMenu;
     private scoreUI: ScoreUI;
-    private food: Food;
+    // private food: Food;
     private tileMap?: TileMap;
+    private tileset?: Tileset;
     private escWasPressed: boolean = false;
     private triggerHandler?: (event: {trigger: PhysicsBody, other: PhysicsBody}) => void;
 
@@ -31,6 +33,13 @@ export class Level01Scene extends Scene {
         
         // Cria o tile map
         this.tileMap = createLevel01Map();
+        console.log("tileMap", this.tileMap.visualLayer.data);
+
+        // Cria o tileset para renderização das texturas
+        this.tileset = new Tileset('./assets/map/tilemap_packed-2.png', 32);
+        console.log("tileset", this.tileset);
+        const allTiles = Array.from(this.tileset.tiles.values());
+        console.log("allTiles", allTiles);
         
         // Posiciona o player no centro do mapa
         const playerSize = 50; // default do Player conforme Player.ts
@@ -46,9 +55,9 @@ export class Level01Scene extends Scene {
         this.scoreUI = new ScoreUI();
         
         // Cria a comida em uma posição inicial aleatória
-        const foodX = Math.random() * (mapWidth - 30);
-        const foodY = Math.random() * (mapHeight - 30);
-        this.food = new Food(foodX, foodY);
+        // const foodX = Math.random() * (mapWidth - 30);
+        // const foodY = Math.random() * (mapHeight - 30);
+        // this.food = new Food(foodX, foodY);
     }
 
     /**
@@ -67,7 +76,7 @@ export class Level01Scene extends Scene {
         const physicsSystem = this.game?.getSystems(PhysicsSystem);
         if (physicsSystem) {
             physicsSystem.registerEntity(this.player);
-            physicsSystem.registerEntity(this.food);
+            // physicsSystem.registerEntity(this.food);
             
             // Configura o tile map no sistema de física para colisões
             if (this.tileMap) {
@@ -79,37 +88,40 @@ export class Level01Scene extends Scene {
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
             renderSystem.registerWorld(this.player);
-            renderSystem.registerWorld(this.food);
+            // renderSystem.registerWorld(this.food);
             renderSystem.registerUI(this.debugFPS);
             renderSystem.registerUI(this.playerStatus);
             renderSystem.registerUI(this.pauseMenu);
             renderSystem.registerUI(this.scoreUI);
             
-            // Configura o tile map no sistema de renderização
+            // Configura o tile map e tileset no sistema de renderização
             if (this.tileMap) {
                 renderSystem.setTileMap(this.tileMap);
+            }
+            if (this.tileset) {
+                renderSystem.setTileset(this.tileset);
             }
         }
 
         // Carrega e toca a música de fundo (não-bloqueante)
-        const audioSystem = this.game?.getSystems(AudioSystem);
-        if (audioSystem) {
-            // Carrega a música talisma.mp3 e toca quando estiver pronta
-            audioSystem.loadMusic('talisma', './assets/musics/talisma.mp3')
-                .then(() => {
-                    // Toca a música em loop quando o carregamento for concluído
-                    audioSystem.playMusic('talisma');
-                })
-                .catch((error) => {
-                    console.error('Erro ao carregar música talisma.mp3:', error);
-                });
+        // const audioSystem = this.game?.getSystems(AudioSystem);
+        // if (audioSystem) {
+        //     // Carrega a música talisma.mp3 e toca quando estiver pronta
+        //     audioSystem.loadMusic('talisma', './assets/musics/talisma.mp3')
+        //         .then(() => {
+        //             // Toca a música em loop quando o carregamento for concluído
+        //             audioSystem.playMusic('talisma');
+        //         })
+        //         .catch((error) => {
+        //             console.error('Erro ao carregar música talisma.mp3:', error);
+        //         });
             
-            // Carrega o efeito sonoro da comida
-            audioSystem.load('raleu-doido', './assets/sounds/raleu-doido.ogg')
-                .catch((error) => {
-                    console.error('Erro ao carregar som raleu-doido.ogg:', error);
-                });
-        }
+        //     // Carrega o efeito sonoro da comida
+        //     audioSystem.load('raleu-doido', './assets/sounds/raleu-doido.ogg')
+        //         .catch((error) => {
+        //             console.error('Erro ao carregar som raleu-doido.ogg:', error);
+        //         });
+        // }
 
         // Escuta eventos de trigger para detectar quando o player coleta a comida
         this.triggerHandler = (event) => this.onTriggerEnter(event);
@@ -137,14 +149,14 @@ export class Level01Scene extends Scene {
         const physicsSystem = this.game?.getSystems(PhysicsSystem);
         if (physicsSystem) {
             physicsSystem.unregisterEntity(this.player);
-            physicsSystem.unregisterEntity(this.food);
+            // physicsSystem.unregisterEntity(this.food);
         }
 
         // Remove as entidades do sistema de renderização
         const renderSystem = this.game?.getSystems(RenderSystem);
         if (renderSystem) {
             renderSystem.unregisterWorld(this.player);
-            renderSystem.unregisterWorld(this.food);
+            // renderSystem.unregisterWorld(this.food);
             renderSystem.unregisterUI(this.debugFPS);
             renderSystem.unregisterUI(this.playerStatus);
             renderSystem.unregisterUI(this.pauseMenu);
@@ -215,17 +227,17 @@ export class Level01Scene extends Scene {
      */
     private onTriggerEnter(event: {trigger: PhysicsBody, other: PhysicsBody}): void {
         // Verifica se foi a comida que foi coletada pelo player
-        if (event.trigger === this.food && event.other === this.player) {
+        // if (event.trigger === this.food && event.other === this.player) {
             // Toca o efeito sonoro
             const audioSystem = this.game?.getSystems(AudioSystem);
-            audioSystem?.playSFX('raleu-doido');
+            // audioSystem?.playSFX('raleu-doido');
             
             // Adiciona pontos
             this.scoreUI.addPoints(1);
             
             // Reposiciona a comida em um lugar aleatório dentro do mapa
-            this.repositionFood();
-        }
+            // this.repositionFood();
+        // }
     }
 
     /**
@@ -249,8 +261,8 @@ export class Level01Scene extends Scene {
         const newX = minX + Math.random() * (maxX - minX);
         const newY = minY + Math.random() * (maxY - minY);
         
-        this.food.x = newX;
-        this.food.y = newY;
+        // this.food.x = newX;
+        // this.food.y = newY;
     }
 
     /**

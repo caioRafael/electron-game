@@ -8,7 +8,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "esbuild src/renderer/main.ts --bundle --format=esm --outfile=dist/renderer/main.js --platform=browser --target=es2020 --sourcemap",
     "copy:html": "mkdir -p dist/renderer && cp -r src/renderer/*.html dist/renderer/",
-    "copy:assets": "mkdir -p dist/renderer/assets && cp -r src/assets/* dist/renderer/assets/",
+    "copy:assets": "mkdir -p dist/renderer/assets && (cp -r src/assets/* dist/renderer/assets/ 2>/dev/null || true)",
     "watch:html": "chokidar \"src/renderer/**/*.html\" -c \"npm run copy:html\"",
     "watch:assets": "chokidar \"src/assets/**/*\" -c \"npm run copy:assets\"",
     "start": "npm run build && electron .",
