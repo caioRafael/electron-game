@@ -4,8 +4,8 @@ import { TileCollisionType } from "../TileTypes";
 
 export function createLevel01Map(): TileMap {
     const tileSize = 32;
-    const width = 20;
-    const height = 15;
+    const width = 50;
+    const height = 35;
 
     // Camada visual: 0 = vazio, 1 = grama verde, 2 = terra marrom
     const visualData: number[][] = [];
@@ -33,7 +33,6 @@ export function createLevel01Map(): TileMap {
                 row.push(7); // Areia no centro
             }
         }
-        console.log("row", row);
         visualData.push(row);
     }
     const visualLayer = new TileLayer(width, height, visualData);

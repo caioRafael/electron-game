@@ -19,11 +19,6 @@
         private sliceTiles(){
             const cols = Math.floor(this.image.width / this.tileSize);
             const rows = Math.floor(this.image.height / this.tileSize);
-            console.log("cols", cols);
-            console.log("rows", rows);
-            console.log("tileSize", this.tileSize);
-            console.log("image.width", this.image.width);
-            console.log("image.height", this.image.height);
 
             let id = 0;
 
